@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - commercial-api-v1
   pull_request:
 
 permissions:
@@ -26,6 +27,11 @@ jobs:
         run: |
           node --check backend/index.mjs
           node --check backend/director-prompt.mjs
+          node --check backend/commercial.mjs
+          node --check backend/qa.mjs
+
+      - name: Run commercial QA tests
+        run: node tests/commercial-qa.mjs
 
       - name: Check required project files
         run: |
@@ -37,10 +43,23 @@ jobs:
           test -f README.md
           test -f LICENSE
           test -f template.yaml
+          test -f commercial-template.yaml
           test -f backend/package.json
           test -f backend/index.mjs
           test -f backend/director-prompt.mjs
+          test -f backend/commercial.mjs
+          test -f backend/qa.mjs
           test -f docs/friction-log.md
+          test -f commercial/openapi.yaml
+          test -f commercial/pricing.md
+          test -f commercial/listing.md
+
+      - name: Sanity-check OpenAPI routes
+        run: |
+          grep -q '^  /v1/plan:' commercial/openapi.yaml
+          grep -q '^  /v1/revise:' commercial/openapi.yaml
+          grep -q '^  /v1/qa:' commercial/openapi.yaml
+          grep -q '^  /health:' commercial/openapi.yaml
 
       - name: Parse HTML
         run: |

@@ -8,7 +8,6 @@ const client = new BedrockRuntimeClient({
 
 const MODEL_ID = process.env.BEDROCK_MODEL_ID;
 const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET || '';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 120000);
 
 function header(event, name) {
@@ -23,9 +22,6 @@ function response(statusCode, body, extraHeaders = {}) {
     statusCode,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'access-control-allow-origin': ALLOWED_ORIGIN,
-      'access-control-allow-headers': 'content-type,x-rapidapi-key,x-rapidapi-host,x-rapidapi-proxy-secret',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
       'cache-control': 'no-store',
       ...extraHeaders,
     },

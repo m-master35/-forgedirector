@@ -16,16 +16,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Check JavaScript syntax
+      - name: Check frontend JavaScript syntax
         run: node --check app.js
 
-      - name: Check required site files
+      - name: Check backend JavaScript syntax
+        run: |
+          node --check backend/index.mjs
+          node --check backend/director-prompt.mjs
+
+      - name: Check required project files
         run: |
           test -f index.html
           test -f styles.css
           test -f app.js
           test -f README.md
           test -f LICENSE
+          test -f template.yaml
+          test -f backend/package.json
+          test -f backend/index.mjs
+          test -f backend/director-prompt.mjs
 
       - name: Parse HTML
         run: |

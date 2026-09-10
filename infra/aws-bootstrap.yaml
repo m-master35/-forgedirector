@@ -148,19 +148,22 @@ Resources:
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource: !Sub '${ArtifactBucket.Arn}/*'
-              - Sid: CommercialStack
+              - Sid: CloudFormationRead
+                Effect: Allow
+                Action:
+                  - cloudformation:Get*
+                  - cloudformation:Describe*
+                  - cloudformation:List*
+                  - cloudformation:ValidateTemplate
+                Resource: '*'
+              - Sid: CommercialStackWrite
                 Effect: Allow
                 Action:
                   - cloudformation:CreateStack
                   - cloudformation:UpdateStack
-                  - cloudformation:DescribeStacks
-                  - cloudformation:DescribeStackEvents
-                  - cloudformation:DescribeChangeSet
                   - cloudformation:CreateChangeSet
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DeleteChangeSet
-                  - cloudformation:GetTemplate
-                  - cloudformation:ValidateTemplate
                 Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/forgedirector-commercial/*
               - Sid: PassExecutionRole
                 Effect: Allow

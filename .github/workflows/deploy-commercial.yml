@@ -68,12 +68,35 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
-      - name: Show API URL
+      - name: Resolve API URL
+        id: api
         run: |
           API_URL=$(aws cloudformation describe-stacks \
             --stack-name forgedirector-commercial \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue" \
             --output text)
+          API_URL="${API_URL%/}"
+          echo "url=$API_URL" >> "$GITHUB_OUTPUT"
           echo "### ForgeDirector commercial API" >> "$GITHUB_STEP_SUMMARY"
-          echo "$API_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "$API_URL/" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test health endpoint and CORS
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -sS -o /tmp/health.json -w '%{http_code}' \
+            -H 'Origin: https://rapidapi.com' \
+            "$API_URL/health")
+          cat /tmp/health.json
+          test "$STATUS" = "200"
+          grep -q '"status":"ok"' /tmp/health.json
+
+          curl -sS -D /tmp/cors.headers -o /dev/null \
+            -X OPTIONS \
+            -H 'Origin: https://rapidapi.com' \
+            -H 'Access-Control-Request-Method: GET' \
+            "$API_URL/health"
+          cat /tmp/cors.headers
+          grep -qi '^access-control-allow-origin: \*' /tmp/cors.headers

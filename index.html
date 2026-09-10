@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0d12" />
+  <title>ForgeDirector — Alexa+ AI Production Director</title>
+  <meta name="description" content="ForgeDirector is a simulated Alexa+ experience that turns a spoken campaign brief into a stateful, editable video production plan." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Amazon Developer Hackathon • Alexa+ Track</p>
+        <h1>ForgeDirector</h1>
+        <p class="subtitle">Your conversational AI production director.</p>
+      </div>
+      <div class="status" aria-label="Application status">
+        <span class="status-dot"></span>
+        <span>Director online</span>
+      </div>
+    </header>
+
+    <section class="hero-card">
+      <div>
+        <p class="kicker">From one sentence to a production-ready campaign</p>
+        <h2>Brief it. Direct it. Refine it.</h2>
+        <p>ForgeDirector maintains campaign state across revisions, so you can change one scene, audience, format, or constraint without starting over.</p>
+      </div>
+      <button id="demoButton" class="secondary">Run 45-second demo</button>
+    </section>
+
+    <section class="workspace">
+      <section class="panel conversation-panel" aria-label="Conversation">
+        <div class="panel-header">
+          <div>
+            <p class="panel-label">Alexa+ simulation</p>
+            <h3>Conversation</h3>
+          </div>
+          <button id="resetButton" class="ghost">Reset</button>
+        </div>
+
+        <div id="conversation" class="conversation" aria-live="polite"></div>
+
+        <div class="suggestions" aria-label="Example requests">
+          <button class="suggestion">Create a premium 30-second ad for a magnesium supplement aimed at young professionals.</button>
+          <button class="suggestion">Make scene 2 darker and more cinematic.</button>
+          <button class="suggestion">Change the audience to gym users.</button>
+          <button class="suggestion">Make a TikTok version and cut it to 15 seconds.</button>
+        </div>
+
+        <form id="promptForm" class="composer">
+          <label class="sr-only" for="promptInput">Message ForgeDirector</label>
+          <textarea id="promptInput" rows="3" placeholder="Tell ForgeDirector what to create or change…" required></textarea>
+          <button type="submit" class="primary">Direct</button>
+        </form>
+      </section>
+
+      <section class="panel output-panel" aria-label="Production plan">
+        <div class="panel-header">
+          <div>
+            <p class="panel-label">Live project state</p>
+            <h3>Production Manifest</h3>
+          </div>
+          <button id="exportButton" class="ghost" disabled>Export JSON</button>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">◇</div>
+          <h4>No campaign yet</h4>
+          <p>Give ForgeDirector a brief. It will create the campaign structure, continuity rules, scenes, voiceover, and generation prompts.</p>
+        </div>
+
+        <div id="manifest" class="manifest hidden">
+          <div id="campaignSummary" class="summary-grid"></div>
+
+          <section class="continuity-card">
+            <p class="panel-label">Continuity lock</p>
+            <div id="continuity"></div>
+          </section>
+
+          <div class="manifest-heading">
+            <h4>Scenes</h4>
+            <span id="sceneCount" class="pill"></span>
+          </div>
+          <div id="scenes" class="scenes"></div>
+        </div>
+      </section>
+    </section>
+
+    <footer>
+      <span>ForgeDirector prototype</span>
+      <span>Stateful • revision-aware • production-oriented</span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

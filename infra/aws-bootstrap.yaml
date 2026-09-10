@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   One-time AWS bootstrap for ForgeDirector. Creates GitHub OIDC trust, a private
-  SAM artifact bucket, least-privilege deployment/execution roles, and an
-  optional monthly cost budget alert. This stack does not deploy the API itself.
+  SAM artifact bucket, scoped deployment/execution roles, and an optional
+  monthly cost budget alert. This stack does not deploy the API itself.
 
 Parameters:
   BudgetEmail:
@@ -57,14 +57,33 @@ Resources:
             Principal:
               Service: cloudformation.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/PowerUserAccess
       Policies:
-        - PolicyName: ForgeDirectorScopedIam
+        - PolicyName: ForgeDirectorCommercialResources
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Sid: CommercialLambda
+                Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:TagResource
+                  - lambda:UntagResource
+                  - lambda:ListTags
+                  - lambda:GetPolicy
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:CreateFunctionUrlConfig
+                  - lambda:GetFunctionUrlConfig
+                  - lambda:UpdateFunctionUrlConfig
+                  - lambda:DeleteFunctionUrlConfig
+                Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:forgedirector-commercial-*
+              - Sid: CommercialFunctionRole
+                Effect: Allow
                 Action:
                   - iam:CreateRole
                   - iam:GetRole
@@ -73,14 +92,22 @@ Resources:
                   - iam:PutRolePolicy
                   - iam:GetRolePolicy
                   - iam:DeleteRolePolicy
+                  - iam:ListRolePolicies
                   - iam:AttachRolePolicy
                   - iam:DetachRolePolicy
+                  - iam:ListAttachedRolePolicies
                   - iam:TagRole
                   - iam:UntagRole
                   - iam:PassRole
                 Resource:
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/forgedirector-commercial-*
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ForgeDirectorCommercial*
+              - Sid: ReadDeploymentArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${ArtifactBucket.Arn}/*'
 
   GitHubDeployRole:
     Type: AWS::IAM::Role

@@ -56,15 +56,20 @@ jobs:
 
       - name: Deploy commercial API
         run: |
+          set -euo pipefail
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/ForgeDirectorCloudFormationExecutionRole"
+          PARAMETER_ARGS=()
+          if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
+            PARAMETER_ARGS+=(--parameter-overrides "RapidApiProxySecret=${RAPIDAPI_PROXY_SECRET}")
+          fi
           sam deploy \
             --template-file .aws-sam/packaged.yaml \
             --stack-name forgedirector-commercial \
             --region "$AWS_REGION" \
             --role-arn "$EXECUTION_ROLE_ARN" \
             --capabilities CAPABILITY_IAM \
-            --parameter-overrides RapidApiProxySecret="$RAPIDAPI_PROXY_SECRET" \
+            "${PARAMETER_ARGS[@]}" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 

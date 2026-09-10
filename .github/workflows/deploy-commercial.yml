@@ -6,6 +6,7 @@ on:
     branches:
       - main
     paths:
+      - .github/workflows/deploy-commercial.yml
       - backend/commercial.mjs
       - backend/director-prompt.mjs
       - backend/qa.mjs
@@ -104,4 +105,20 @@ jobs:
             -H 'Access-Control-Request-Method: GET' \
             "$API_URL/health"
           cat /tmp/cors.headers
-          grep -qi '^access-control-allow-origin: \*' /tmp/cors.headers
+          grep -qi '^access-control-allow-origin: https://rapidapi.com' /tmp/cors.headers
+          grep -qi '^access-control-allow-methods: .*GET' /tmp/cors.headers
+
+      - name: Smoke test Bedrock plan endpoint
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -sS -o /tmp/plan.json -w '%{http_code}' \
+            -X POST \
+            -H 'content-type: application/json' \
+            --data '{"brief":"Create a concise 10-second vertical social ad for a fictional productivity drink aimed at young professionals."}' \
+            "$API_URL/v1/plan")
+          cat /tmp/plan.json
+          test "$STATUS" = "200"
+          grep -q '"campaign"' /tmp/plan.json
+          grep -q '"operation":"plan"' /tmp/plan.json

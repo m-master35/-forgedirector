@@ -1,0 +1,77 @@
+name: Deploy Commercial API
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - backend/commercial.mjs
+      - backend/director-prompt.mjs
+      - backend/qa.mjs
+      - backend/package.json
+      - commercial-template.yaml
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_SAM_ARTIFACT_BUCKET: ${{ vars.AWS_SAM_ARTIFACT_BUCKET }}
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+
+jobs:
+  deploy:
+    if: ${{ vars.AWS_SAM_ARTIFACT_BUCKET != '' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup AWS SAM
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorCommercialDeploy
+          mask-aws-account-id: true
+
+      - name: Build commercial API
+        run: sam build --template-file commercial-template.yaml
+
+      - name: Package commercial API
+        run: |
+          sam package \
+            --template-file .aws-sam/build/template.yaml \
+            --s3-bucket "$AWS_SAM_ARTIFACT_BUCKET" \
+            --output-template-file .aws-sam/packaged.yaml
+
+      - name: Deploy commercial API
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/ForgeDirectorCloudFormationExecutionRole"
+          sam deploy \
+            --template-file .aws-sam/packaged.yaml \
+            --stack-name forgedirector-commercial \
+            --region "$AWS_REGION" \
+            --role-arn "$EXECUTION_ROLE_ARN" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+      - name: Show API URL
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name forgedirector-commercial \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue" \
+            --output text)
+          echo "### ForgeDirector commercial API" >> "$GITHUB_STEP_SUMMARY"
+          echo "$API_URL" >> "$GITHUB_STEP_SUMMARY"

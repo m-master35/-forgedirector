@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ForgeDirector Bedrock-backed conversational production director
+
+Parameters:
+  BedrockModelId:
+    Type: String
+    Description: Bedrock model ID or inference profile ARN used by ForgeDirector
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: Origin allowed to call the public API
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures:
+      - arm64
+    Timeout: 30
+    MemorySize: 512
+    Tracing: Active
+
+Resources:
+  ForgeDirectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: index.handler
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !Ref AllowedOrigin
+          AllowMethods:
+            - POST
+          AllowHeaders:
+            - content-type
+
+Outputs:
+  ForgeDirectorApiUrl:
+    Description: Public ForgeDirector HTTP endpoint
+    Value: !GetAtt ForgeDirectorFunctionUrl.FunctionUrl

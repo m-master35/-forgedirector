@@ -1,0 +1,268 @@
+openapi: 3.0.3
+info:
+  title: ForgeDirector Video Creative Intelligence API
+  version: 1.0.0
+  description: |
+    Turn short creative briefs into structured video-production manifests, revise existing campaigns without losing unrelated decisions, and run deterministic production QA.
+  contact:
+    name: ForgeDirector
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Check API health and discover endpoints
+      responses:
+        '200':
+          description: API is available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/plan:
+    post:
+      operationId: planCampaign
+      summary: Turn a creative brief into a production manifest
+      description: Creates a new structured short-form video campaign from a natural-language brief.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+            examples:
+              supplementAd:
+                value:
+                  brief: Create a premium 30-second vertical ad for a magnesium supplement aimed at young professionals. Keep the language credible and restrained.
+                  constraints:
+                    platform: TikTok
+                    aspectRatio: 9:16
+                    durationSeconds: 30
+      responses:
+        '200':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/EngineError'
+  /v1/revise:
+    post:
+      operationId: reviseCampaign
+      summary: Revise part of an existing campaign while preserving the rest
+      description: Applies a natural-language revision to an existing production manifest and returns the complete updated manifest.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviseRequest'
+      responses:
+        '200':
+          description: Campaign revised
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/EngineError'
+  /v1/qa:
+    post:
+      operationId: checkCampaign
+      summary: Run production QA on a campaign manifest
+      description: Checks duration integrity, scene structure, voiceover density, continuity lock, aspect ratio, and prompt completeness without consuming an AI-model call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [campaign]
+              properties:
+                campaign:
+                  $ref: '#/components/schemas/Campaign'
+      responses:
+        '200':
+          description: QA result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QAResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Request did not arrive through the configured RapidAPI gateway
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    EngineError:
+      description: Creative intelligence engine could not complete the request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    PlanRequest:
+      type: object
+      required: [brief]
+      properties:
+        brief:
+          type: string
+          maxLength: 6000
+          description: Natural-language creative brief.
+        constraints:
+          type: object
+          additionalProperties: true
+          description: Optional structured creative constraints such as platform, durationSeconds, aspectRatio, audience, tone, or product rules.
+    ReviseRequest:
+      type: object
+      required: [instruction, campaign]
+      properties:
+        instruction:
+          type: string
+          maxLength: 6000
+          description: What should change in the existing campaign.
+        campaign:
+          $ref: '#/components/schemas/Campaign'
+    CampaignResponse:
+      type: object
+      required: [campaign, qa, meta]
+      properties:
+        campaign:
+          $ref: '#/components/schemas/Campaign'
+        qa:
+          $ref: '#/components/schemas/QAResult'
+        meta:
+          type: object
+          properties:
+            operation:
+              type: string
+            modelId:
+              type: string
+            usage:
+              type: object
+              nullable: true
+              additionalProperties: true
+            requestId:
+              type: string
+    Campaign:
+      type: object
+      required: [summary, audience, platform, aspectRatio, durationSeconds, continuity, scenes, changeSummary]
+      properties:
+        summary:
+          type: string
+        audience:
+          type: string
+        platform:
+          type: string
+          enum: [TikTok, Instagram Reels, YouTube Shorts, General]
+        aspectRatio:
+          type: string
+          enum: ['9:16', '1:1', '16:9']
+        durationSeconds:
+          type: integer
+          minimum: 1
+          maximum: 120
+        continuity:
+          type: object
+          required: [leadCharacter, locked]
+          properties:
+            leadCharacter:
+              type: string
+              nullable: true
+            locked:
+              type: boolean
+        scenes:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Scene'
+        changeSummary:
+          type: string
+    Scene:
+      type: object
+      required: [id, durationSeconds, visualDirection, voiceover, generationPrompt]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        durationSeconds:
+          type: integer
+          minimum: 1
+        visualDirection:
+          type: string
+        voiceover:
+          type: string
+        generationPrompt:
+          type: string
+    QAResponse:
+      type: object
+      properties:
+        qa:
+          $ref: '#/components/schemas/QAResult'
+        requestId:
+          type: string
+    QAResult:
+      type: object
+      required: [score, passed, checks, issues]
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        passed:
+          type: boolean
+        summary:
+          type: string
+        checks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        issues:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    HealthResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        status:
+          type: string
+        endpoints:
+          type: object
+          additionalProperties:
+            type: string
+        requestId:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        requestId:
+          type: string

@@ -3,18 +3,21 @@ const state = {
   history: [],
 };
 
-const conversation = document.getElementById('conversation');
-const promptForm = document.getElementById('promptForm');
-const promptInput = document.getElementById('promptInput');
-const manifest = document.getElementById('manifest');
-const emptyState = document.getElementById('emptyState');
-const campaignSummary = document.getElementById('campaignSummary');
-const continuity = document.getElementById('continuity');
-const scenes = document.getElementById('scenes');
-const sceneCount = document.getElementById('sceneCount');
-const resetButton = document.getElementById('resetButton');
-const exportButton = document.getElementById('exportButton');
-const demoButton = document.getElementById('demoButton');
+const $ = (id) => document.getElementById(id);
+const conversation = $('conversation');
+const promptForm = $('promptForm');
+const promptInput = $('promptInput');
+const manifest = $('manifest');
+const emptyState = $('emptyState');
+const campaignSummary = $('campaignSummary');
+const continuity = $('continuity');
+const scenes = $('scenes');
+const sceneCount = $('sceneCount');
+const resetButton = $('resetButton');
+const exportButton = $('exportButton');
+const demoButton = $('demoButton');
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 const escapeHtml = (value = '') => String(value)
   .replaceAll('&', '&amp;')
@@ -32,92 +35,134 @@ function addMessage(role, text) {
   conversation.scrollTop = conversation.scrollHeight;
 }
 
-function inferCampaign(text) {
+function parseDuration(text, fallback = 30) {
+  const match = text.toLowerCase().match(/(\d{1,3})\s*[- ]?\s*(?:second|seconds|sec|secs|s)\b/);
+  return match ? clamp(Number(match[1]), 6, 120) : fallback;
+}
+
+function parsePlatform(text, fallback = 'Multi-platform') {
   const lower = text.toLowerCase();
-  const durationMatch = lower.match(/(\d{1,3})\s*(?:second|sec|s)\b/);
-  const duration = durationMatch ? Math.max(6, Math.min(120, Number(durationMatch[1]))) : 30;
+  if (lower.includes('tiktok')) return 'TikTok';
+  if (lower.includes('instagram') || lower.includes('reel')) return 'Instagram Reels';
+  if (lower.includes('youtube') || lower.includes('short')) return 'YouTube Shorts';
+  return fallback;
+}
 
-  let platform = 'Multi-platform';
-  if (lower.includes('tiktok')) platform = 'TikTok';
-  else if (lower.includes('instagram') || lower.includes('reel')) platform = 'Instagram Reels';
-  else if (lower.includes('youtube') || lower.includes('short')) platform = 'YouTube Shorts';
+function parseAudience(text, fallback = 'Young professionals') {
+  const strong = text.match(/(?:aimed at|targeting|targeted at)\s+([^,.]+)/i);
+  if (strong) return strong[1].trim();
 
-  let tone = 'Premium, confident, contemporary';
-  if (lower.includes('cinematic')) tone = 'Cinematic, premium, emotionally controlled';
-  if (lower.includes('funny') || lower.includes('humour') || lower.includes('humor')) tone = 'Witty, fast, self-aware';
-  if (lower.includes('luxury')) tone = 'Luxury, restrained, tactile';
-
-  const audienceMatch = text.match(/(?:aimed at|for|targeting)\s+([^,.]+)/i);
-  const audience = audienceMatch ? audienceMatch[1].trim() : 'Young professionals';
-
-  let product = 'Product';
-  const productPatterns = [
-    /ad for (?:an? )?([^,.]+?)(?: aimed| targeting| for |\.|$)/i,
-    /campaign for (?:an? )?([^,.]+?)(?: aimed| targeting| for |\.|$)/i,
-    /promote (?:an? )?([^,.]+?)(?: aimed| targeting| for |\.|$)/i,
-  ];
-  for (const pattern of productPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      product = match[1].trim();
-      break;
-    }
+  const ending = text.match(/\bfor\s+([^,.]+?)\s*$/i);
+  if (ending && !/^(?:a|an|the)\s+(?:ad|advert|campaign|video)\b/i.test(ending[1])) {
+    return ending[1].trim();
   }
-  if (product === 'Product' && lower.includes('magnesium')) product = 'Magnesium supplement';
 
-  const aspect = platform === 'Multi-platform' ? '9:16 master + adaptable crops' : '9:16';
-  const sceneTotal = duration <= 15 ? 3 : duration <= 35 ? 4 : 5;
-  const baseSceneDuration = Math.max(2, Math.floor(duration / sceneTotal));
+  return fallback;
+}
 
-  const actor = 'One consistent lead: late-20s professional, grounded wardrobe, natural performance';
-  const visualLanguage = tone.toLowerCase().includes('cinematic')
+function parseProduct(text, fallback = 'Product') {
+  const patterns = [
+    /\bad for\s+(?:an?\s+)?([^,.]+?)(?=\s+(?:aimed at|targeting|targeted at)\b|[,.]|$)/i,
+    /\bcampaign for\s+(?:an?\s+)?([^,.]+?)(?=\s+(?:aimed at|targeting|targeted at)\b|[,.]|$)/i,
+    /\bpromote\s+(?:an?\s+)?([^,.]+?)(?=\s+(?:aimed at|targeting|targeted at)\b|[,.]|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim();
+  }
+
+  if (/magnesium/i.test(text)) return 'Magnesium supplement';
+  return fallback;
+}
+
+function inferTone(text) {
+  const lower = text.toLowerCase();
+  if (lower.includes('luxury')) return 'Luxury, restrained, tactile';
+  if (lower.includes('cinematic')) return 'Cinematic, premium, emotionally controlled';
+  if (lower.includes('funny') || lower.includes('humour') || lower.includes('humor')) return 'Witty, fast, self-aware';
+  return 'Premium, confident, contemporary';
+}
+
+function sceneBlueprints(campaign) {
+  const { product, audience, tone, aspect } = campaign;
+  const cinematic = tone.toLowerCase().includes('cinematic');
+  const visualLanguage = cinematic
     ? 'Moody directional light, shallow depth of field, controlled camera motion'
     : 'Clean contrast, purposeful camera movement, premium commercial realism';
 
-  const sceneBlueprints = [
+  return [
     {
       title: 'Pattern interrupt',
-      visual: `Open on the audience pain point in a visually immediate way. ${visualLanguage}.`,
-      voiceover: `Some days ask more from you than your routine gives back.`,
-      prompt: `Commercial video, ${audience}, opening tension, ${tone}, ${aspect}, realistic product-ad cinematography, no logos except approved product packaging.`,
+      visual: `Open on a recognizable tension for ${audience}. ${visualLanguage}.`,
+      voiceover: 'Some days ask more from you than your routine gives back.',
+      prompt: `Commercial video for ${audience}, opening tension, ${tone}, ${aspect}, realistic product-ad cinematography, no logos except approved product packaging.`,
     },
     {
       title: 'Product reveal',
       visual: `Introduce ${product} with one confident hero movement. Keep the same lead and lighting world.`,
-      voiceover: `That is where a simpler evening ritual can make a difference.`,
+      voiceover: 'That is where a simpler ritual can make a difference.',
       prompt: `Premium hero reveal of ${product}, tactile macro details, same lead character, continuity preserved, ${tone}, ${aspect}.`,
     },
     {
       title: 'Benefit in context',
-      visual: `Show the product fitting naturally into the user's real routine rather than presenting a feature list.`,
-      voiceover: `Built to fit the routine you already have — not become another one to manage.`,
+      visual: `Show ${product} fitting naturally into the real routine of ${audience}, not as a floating feature list.`,
+      voiceover: 'Built to fit the routine you already have — not become another one to manage.',
       prompt: `${audience} using ${product} naturally in context, believable lifestyle moment, continuity locked, ${tone}, ${aspect}.`,
     },
     {
       title: 'Outcome',
-      visual: `Resolve the opening tension with a calm, credible outcome. Avoid exaggerated transformation language.`,
-      voiceover: `Less friction. A better finish to the day.`,
+      visual: 'Resolve the opening tension with a calm, credible outcome. Avoid exaggerated transformation language.',
+      voiceover: 'Less friction. A better finish to the day.',
       prompt: `Resolved lifestyle scene, same character, same wardrobe family, calm premium finish, ${tone}, ${aspect}.`,
     },
     {
       title: 'End frame',
-      visual: `Finish on a clean product lock-up with one concise call to action and clear negative space.`,
+      visual: 'Finish on a clean product lock-up with one concise call to action and clear negative space.',
       voiceover: `${product}. Keep the routine simple.`,
       prompt: `Minimal product end frame for ${product}, clean composition, premium commercial lighting, space for CTA, ${aspect}.`,
     },
   ];
+}
 
-  const chosen = sceneBlueprints.slice(0, sceneTotal);
-  const used = baseSceneDuration * sceneTotal;
-  const remainder = duration - used;
+function sceneTotalFor(duration) {
+  if (duration <= 15) return 3;
+  if (duration <= 35) return 4;
+  return 5;
+}
 
-  const sceneList = chosen.map((scene, index) => ({
-    id: index + 1,
-    duration: baseSceneDuration + (index < remainder ? 1 : 0),
-    ...scene,
-  }));
+function distributeDurations(sceneList, totalDuration) {
+  const base = Math.floor(totalDuration / sceneList.length);
+  let remainder = totalDuration - base * sceneList.length;
+  sceneList.forEach((scene, index) => {
+    scene.id = index + 1;
+    scene.duration = base + (remainder-- > 0 ? 1 : 0);
+  });
+}
 
-  return {
+function buildScenes(campaign, previousScenes = []) {
+  const targetCount = sceneTotalFor(campaign.duration);
+  const defaults = sceneBlueprints(campaign).slice(0, targetCount);
+  const built = defaults.map((base, index) => {
+    const previous = previousScenes[index];
+    return previous
+      ? { ...base, ...previous, id: index + 1 }
+      : { ...base, id: index + 1, duration: 0 };
+  });
+
+  distributeDurations(built, campaign.duration);
+  return built;
+}
+
+function inferCampaign(text) {
+  const duration = parseDuration(text, 30);
+  const platform = parsePlatform(text);
+  const audience = parseAudience(text);
+  const product = parseProduct(text);
+  const tone = inferTone(text);
+  const aspect = platform === 'Multi-platform' ? '9:16 master + adaptable crops' : '9:16';
+
+  const campaign = {
     product,
     audience,
     duration,
@@ -126,27 +171,27 @@ function inferCampaign(text) {
     tone,
     objective: 'Turn one conversational brief into an execution-ready video campaign manifest.',
     continuity: {
-      actor,
-      visualLanguage,
+      actor: 'One consistent lead: late-20s professional, grounded wardrobe, natural performance',
+      visualLanguage: tone.toLowerCase().includes('cinematic')
+        ? 'Moody directional light, shallow depth of field, controlled camera motion'
+        : 'Clean contrast, purposeful camera movement, premium commercial realism',
       guardrail: 'Preserve product identity, lead character, wardrobe family, lighting logic, and camera language across revisions unless explicitly changed.',
     },
-    scenes: sceneList,
+    scenes: [],
     revision: 1,
   };
+
+  campaign.scenes = buildScenes(campaign);
+  return campaign;
 }
 
-function rebuildSceneDurations(campaign) {
-  const count = campaign.duration <= 15 ? 3 : campaign.duration <= 35 ? 4 : 5;
-  while (campaign.scenes.length > count) campaign.scenes.pop();
-  while (campaign.scenes.length < count) {
-    const next = inferCampaign(`Create a ${campaign.duration} second ad for ${campaign.product} aimed at ${campaign.audience}.`).scenes[campaign.scenes.length];
-    campaign.scenes.push(next);
-  }
-  const base = Math.floor(campaign.duration / count);
-  let remainder = campaign.duration - base * count;
-  campaign.scenes.forEach((scene, i) => {
-    scene.id = i + 1;
-    scene.duration = base + (remainder-- > 0 ? 1 : 0);
+function refreshDerivedPrompts(campaign) {
+  const defaults = sceneBlueprints(campaign);
+  campaign.scenes.forEach((scene, index) => {
+    const base = defaults[index];
+    if (!base) return;
+    scene.prompt = base.prompt;
+    if (!scene.visual.includes('Shift exposure darker')) scene.visual = base.visual;
   });
 }
 
@@ -155,12 +200,34 @@ function reviseCampaign(text) {
   const lower = text.toLowerCase();
   const changes = [];
 
+  const duration = parseDuration(text, null);
+  if (duration && /(cut|change|make|shorten|length|duration)/i.test(text)) {
+    c.duration = duration;
+    c.scenes = buildScenes(c, c.scenes);
+    changes.push(`duration to ${c.duration}s`);
+  }
+
+  const platform = parsePlatform(text, null);
+  if (platform) {
+    c.platform = platform;
+    c.aspect = '9:16';
+    refreshDerivedPrompts(c);
+    changes.push(`platform to ${platform}`);
+  }
+
+  const audienceMatch = text.match(/(?:change|switch|set)(?: the)? audience (?:to|as)\s+([^,.]+)/i);
+  if (audienceMatch) {
+    c.audience = audienceMatch[1].trim();
+    refreshDerivedPrompts(c);
+    changes.push(`audience to ${c.audience}`);
+  }
+
   const sceneMatch = lower.match(/scene\s*(\d+)/);
   if (sceneMatch) {
-    const scene = c.scenes.find(s => s.id === Number(sceneMatch[1]));
+    const scene = c.scenes.find((item) => item.id === Number(sceneMatch[1]));
     if (scene) {
       if (lower.includes('darker')) {
-        scene.visual += ' Shift exposure darker with stronger negative fill and practical highlights.';
+        scene.visual = `${scene.visual.replace(/\s*Shift exposure darker.*$/i, '')} Shift exposure darker with stronger negative fill and practical highlights.`;
         scene.prompt += ' Darker exposure, richer shadows, practical highlights, controlled contrast.';
         changes.push(`scene ${scene.id} lighting`);
       }
@@ -176,36 +243,6 @@ function reviseCampaign(text) {
     }
   }
 
-  const durationMatch = lower.match(/(?:cut|make|change)(?: it)?(?: to)?\s*(\d{1,3})\s*(?:second|sec|s)\b/);
-  if (durationMatch) {
-    c.duration = Math.max(6, Math.min(120, Number(durationMatch[1])));
-    rebuildSceneDurations(c);
-    changes.push(`duration to ${c.duration}s`);
-  }
-
-  if (lower.includes('tiktok')) {
-    c.platform = 'TikTok';
-    c.aspect = '9:16';
-    changes.push('platform to TikTok');
-  } else if (lower.includes('instagram') || lower.includes('reel')) {
-    c.platform = 'Instagram Reels';
-    c.aspect = '9:16';
-    changes.push('platform to Instagram Reels');
-  } else if (lower.includes('youtube') || lower.includes('shorts')) {
-    c.platform = 'YouTube Shorts';
-    c.aspect = '9:16';
-    changes.push('platform to YouTube Shorts');
-  }
-
-  const audienceMatch = text.match(/(?:change|switch|set)(?: the)? audience (?:to|as)\s+([^,.]+)/i);
-  if (audienceMatch) {
-    c.audience = audienceMatch[1].trim();
-    c.scenes.forEach(scene => {
-      scene.prompt = scene.prompt.replace(/young professionals/gi, c.audience);
-    });
-    changes.push(`audience to ${c.audience}`);
-  }
-
   if (lower.includes('same actor') || lower.includes('same character') || lower.includes('keep the actor')) {
     c.continuity.guardrail = 'Hard-lock the same lead identity, facial features, age, body type, wardrobe family, and styling across every shot and revision.';
     changes.push('lead-character continuity lock');
@@ -213,6 +250,7 @@ function reviseCampaign(text) {
 
   if (lower.includes('luxury')) {
     c.tone = 'Luxury, restrained, tactile';
+    refreshDerivedPrompts(c);
     changes.push('tone to luxury');
   }
 
@@ -248,6 +286,7 @@ function renderManifest() {
     ['Revision', `v${c.revision}`],
     ['Workflow', 'Stateful'],
   ];
+
   campaignSummary.innerHTML = summary.map(([label, value]) => `
     <div class="summary-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
   `).join('');
@@ -259,7 +298,7 @@ function renderManifest() {
   `;
 
   sceneCount.textContent = `${c.scenes.length} scenes`;
-  scenes.innerHTML = c.scenes.map(scene => `
+  scenes.innerHTML = c.scenes.map((scene) => `
     <article class="scene-card">
       <div class="scene-top">
         <span class="scene-number">Scene ${scene.id}</span>
@@ -273,21 +312,27 @@ function renderManifest() {
   `).join('');
 }
 
+function isNewCampaignRequest(text) {
+  if (!state.campaign) return true;
+  return /\b(create|build|generate|develop)\b/i.test(text) && /\b(ad|advert|campaign|video)\b/i.test(text);
+}
+
 function processPrompt(text) {
   addMessage('user', text);
 
-  if (!state.campaign || /\b(create|make|build|generate|develop)\b/i.test(text) && /\b(ad|campaign|video)\b/i.test(text)) {
+  if (isNewCampaignRequest(text)) {
     state.campaign = inferCampaign(text);
-    addMessage('director', `Campaign created. I built a ${state.campaign.duration}-second ${state.campaign.platform} production manifest for ${state.campaign.product}, aimed at ${state.campaign.audience}. The continuity lock will stay intact across revisions.`);
+    const c = state.campaign;
+    addMessage('director', `Campaign created. I built a ${c.duration}-second ${c.platform} production manifest for ${c.product}, aimed at ${c.audience}. The continuity lock will stay intact across revisions.`);
   } else {
     const changes = reviseCampaign(text);
-    addMessage('director', `Updated without rebuilding the campaign: ${changes.join(', ')}. The rest of the production state remains locked.`);
+    addMessage('director', `Updated without rebuilding the campaign: ${changes.join(', ')}. Unrelated production decisions remain locked.`);
   }
 
   renderManifest();
 }
 
-promptForm.addEventListener('submit', event => {
+promptForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const text = promptInput.value.trim();
   if (!text) return;
@@ -295,7 +340,7 @@ promptForm.addEventListener('submit', event => {
   processPrompt(text);
 });
 
-document.querySelectorAll('.suggestion').forEach(button => {
+document.querySelectorAll('.suggestion').forEach((button) => {
   button.addEventListener('click', () => processPrompt(button.textContent.trim()));
 });
 
@@ -333,7 +378,7 @@ demoButton.addEventListener('click', async () => {
   ];
 
   for (const step of steps) {
-    await new Promise(resolve => setTimeout(resolve, 650));
+    await new Promise((resolve) => setTimeout(resolve, 650));
     processPrompt(step);
   }
 });

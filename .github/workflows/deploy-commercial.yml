@@ -20,6 +20,7 @@ env:
   AWS_REGION: eu-west-1
   AWS_SAM_ARTIFACT_BUCKET: ${{ vars.AWS_SAM_ARTIFACT_BUCKET }}
   AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
 
 jobs:
   deploy:
@@ -63,6 +64,7 @@ jobs:
             --region "$AWS_REGION" \
             --role-arn "$EXECUTION_ROLE_ARN" \
             --capabilities CAPABILITY_IAM \
+            --parameter-overrides RapidApiProxySecret="$RAPIDAPI_PROXY_SECRET" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 

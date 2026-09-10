@@ -1,0 +1,194 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  One-time AWS bootstrap for ForgeDirector. Creates GitHub OIDC trust, a private
+  SAM artifact bucket, least-privilege deployment/execution roles, and an
+  optional monthly cost budget alert. This stack does not deploy the API itself.
+
+Parameters:
+  BudgetEmail:
+    Type: String
+    Default: ''
+    Description: Optional email address for AWS cost alerts. Leave blank to skip alerts.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Monthly AWS cost threshold in USD.
+
+Conditions:
+  HasBudgetEmail: !Not [!Equals [!Ref BudgetEmail, '']]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldSamArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ForgeDirectorCloudFormationExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+      Policies:
+        - PolicyName: ForgeDirectorScopedIam
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:GetRole
+                  - iam:DeleteRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:PassRole
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/forgedirector-commercial-*
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ForgeDirectorCommercial*
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ForgeDirectorGitHubDeployRole
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:m-master35@168433363/-forgedirector@1363567504:ref:refs/heads/main
+      Policies:
+        - PolicyName: DeployForgeDirectorCommercial
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ArtifactBucketList
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt ArtifactBucket.Arn
+              - Sid: ArtifactObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${ArtifactBucket.Arn}/*'
+              - Sid: CommercialStack
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:GetTemplate
+                  - cloudformation:ValidateTemplate
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/forgedirector-commercial/*
+              - Sid: PassExecutionRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CloudFormationExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+
+  CostBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudgetEmail
+    Properties:
+      Budget:
+        BudgetName: ForgeDirector-Monthly-Cost-Guardrail
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        CostTypes:
+          IncludeCredit: false
+          IncludeDiscount: true
+          IncludeOtherSubscription: true
+          IncludeRecurring: true
+          IncludeRefund: false
+          IncludeSubscription: true
+          IncludeSupport: true
+          IncludeTax: true
+          IncludeUpfront: true
+          UseAmortized: false
+          UseBlended: false
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+
+Outputs:
+  GitHubDeployRoleArn:
+    Description: Put this value in the GitHub repository variable AWS_DEPLOY_ROLE_ARN.
+    Value: !GetAtt GitHubDeployRole.Arn
+  ArtifactBucketName:
+    Description: Put this value in the GitHub repository variable AWS_SAM_ARTIFACT_BUCKET.
+    Value: !Ref ArtifactBucket
+  AwsRegion:
+    Description: Region used by the deployment workflow.
+    Value: !Ref AWS::Region
+  OidcSubject:
+    Description: Immutable GitHub OIDC subject trusted by this stack.
+    Value: repo:m-master35@168433363/-forgedirector@1363567504:ref:refs/heads/main

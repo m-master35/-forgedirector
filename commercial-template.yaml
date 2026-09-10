@@ -55,9 +55,20 @@ Resources:
             - POST
           AllowHeaders:
             - content-type
+            - authorization
+            - cache-control
+            - expires
+            - pragma
+            - usequerystring
+            - x-rapidapi-ua
             - x-rapidapi-key
             - x-rapidapi-host
             - x-rapidapi-proxy-secret
+            - x-rapidapi-user
+            - x-rapidapi-subscription
+            - x-rapidapi-version
+            - x-forwarded-for
+            - x-forwarded-host
 
 Outputs:
   CommercialApiBaseUrl:

@@ -229,15 +229,12 @@ export const handler = async (event) => {
     console.error('ForgeDirector commercial API error', {
       requestId,
       path,
-      name: error?.name,
       message: error?.message,
     });
-    const upstreamCode = String(error?.name || 'UpstreamError').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80);
     return response(error?.statusCode || 502, {
       error: error?.statusCode && error.statusCode < 500
         ? error.message
         : 'The creative intelligence engine could not complete the request.',
-      code: upstreamCode,
       requestId,
     });
   }

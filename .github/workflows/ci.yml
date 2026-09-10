@@ -1,0 +1,38 @@
+name: Validate ForgeDirector
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check JavaScript syntax
+        run: node --check app.js
+
+      - name: Check required site files
+        run: |
+          test -f index.html
+          test -f styles.css
+          test -f app.js
+          test -f README.md
+          test -f LICENSE
+
+      - name: Parse HTML
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          parser = HTMLParser()
+          parser.feed(Path('index.html').read_text(encoding='utf-8'))
+          print('HTML parse passed')
+          PY

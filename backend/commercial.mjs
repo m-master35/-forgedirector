@@ -10,6 +10,7 @@ const MODEL_ID = process.env.BEDROCK_MODEL_ID;
 const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET || '';
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 120000);
 
+// CORS is configured at the Lambda Function URL layer to avoid duplicate response headers.
 function header(event, name) {
   const target = name.toLowerCase();
   const headers = event?.headers || {};

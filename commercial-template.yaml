@@ -5,6 +5,7 @@ Description: ForgeDirector Video Creative Intelligence commercial API
 Parameters:
   BedrockModelId:
     Type: String
+    Default: eu.amazon.nova-2-lite-v1:0
     Description: Amazon Bedrock model ID or inference profile ARN
   RapidApiProxySecret:
     Type: String

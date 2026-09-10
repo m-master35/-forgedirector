@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ForgeDirector Video Creative Intelligence commercial API
+
+Parameters:
+  BedrockModelId:
+    Type: String
+    Description: Amazon Bedrock model ID or inference profile ARN
+  RapidApiProxySecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Optional X-RapidAPI-Proxy-Secret value from RapidAPI Studio
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS origin. RapidAPI server-to-server calls do not require browser CORS.
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
+    Timeout: 40
+    MemorySize: 512
+    Tracing: Active
+
+Resources:
+  CreativeIntelligenceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: commercial.handler
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          RAPIDAPI_PROXY_SECRET: !Ref RapidApiProxySecret
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+          MAX_BODY_BYTES: '120000'
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: '*'
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !Ref AllowedOrigin
+          AllowMethods:
+            - GET
+            - POST
+          AllowHeaders:
+            - content-type
+            - x-rapidapi-key
+            - x-rapidapi-host
+            - x-rapidapi-proxy-secret
+
+Outputs:
+  CommercialApiBaseUrl:
+    Description: Base URL to configure in RapidAPI Studio
+    Value: !GetAtt CreativeIntelligenceFunctionUrl.FunctionUrl

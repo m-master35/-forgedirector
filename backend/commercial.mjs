@@ -300,7 +300,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
   const rawText = extractText(result);
   const analysis = normalizeVideoAnalysis(
     JSON.parse(cleanModelJson(rawText)),
-    { objective, requirements },
+    { objective, requirements, hasTranscript: Boolean(transcript) },
   );
 
   return {
@@ -328,7 +328,7 @@ function revisionMessage(payload) {
 function apiInfo() {
   return {
     name: 'ForgeDirector Video Creative Intelligence API',
-    version: '1.1.0',
+    version: '1.2.0',
     status: 'ok',
     endpoints: {
       upload: 'POST /v1/uploads',
@@ -401,6 +401,7 @@ export const handler = async (event) => {
             modelId: MODEL_ID,
             platform: result.platform,
             objective: result.objective,
+            requirementsApplied: Object.keys(result.requirements || {}).length > 0,
             asset: {
               id: asset.assetId,
               sizeBytes: asset.sizeBytes,

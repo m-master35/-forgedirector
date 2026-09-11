@@ -24,7 +24,7 @@ paths:
       operationId: createVideoUpload
       summary: Create a temporary private upload URL for a video
       description: |
-        Returns a short-lived presigned S3 PUT URL. Upload the video directly to that URL using the returned Content-Type header, then pass the returned assetId to /v1/analyze. Temporary assets expire automatically.
+        Returns a short-lived presigned S3 PUT URL. Upload the video directly to that URL using the returned Content-Type header, then pass the returned assetId to /v1/analyze. Successfully analyzed assets are deleted immediately; abandoned uploads remain private and are removed by the storage lifecycle.
       requestBody:
         required: true
         content:

@@ -240,7 +240,10 @@ async function invokeVideoAnalysis({ asset, payload }) {
   }));
 
   const rawText = extractText(result);
-  const analysis = normalizeVideoAnalysis(JSON.parse(cleanModelJson(rawText)));
+  const analysis = normalizeVideoAnalysis(
+    JSON.parse(cleanModelJson(rawText)),
+    { objective },
+  );
 
   return {
     analysis,

@@ -1,0 +1,71 @@
+name: Benchmark Live Video QA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: forgedirector-live-benchmark
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorVideoBenchmark
+          mask-aws-account-id: true
+
+      - name: Resolve live API URL
+        id: api
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name forgedirector-commercial \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue" \
+            --output text)
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Install video tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Run labeled live-video benchmark
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: |
+          chmod +x tests/run-live-video-benchmark.sh
+          tests/run-live-video-benchmark.sh benchmark-results
+
+      - name: Add benchmark summary
+        if: always()
+        run: |
+          if [ -f benchmark-results/summary.md ]; then
+            cat benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgedirector-live-video-benchmark
+          path: |
+            benchmark-results/*.json
+            benchmark-results/*.md
+          if-no-files-found: warn

@@ -27,6 +27,8 @@ Upload a short-form video, call `/v1/analyze`, and receive standardized JSON con
 - ranked retention risks
 - prioritized fixes by impact and effort
 - production-ready prompts for segments that should be regenerated
+- deterministic `accept`, `revise`, or `regenerate` quality gate for automation
+- objective-specific scoring weights for engagement, conversion, awareness, education, app installs, and lead generation
 - TikTok, Reels, and Shorts repurposing guidance
 
 Scores are creative-quality heuristics, not predictions or guarantees of views, retention, sales, ROAS, or virality.

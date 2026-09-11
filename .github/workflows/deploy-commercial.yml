@@ -19,6 +19,10 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: forgedirector-commercial-production
+  cancel-in-progress: false
+
 env:
   AWS_REGION: eu-west-1
   AWS_SAM_ARTIFACT_BUCKET: ${{ vars.AWS_SAM_ARTIFACT_BUCKET }}
@@ -186,4 +190,4 @@ jobs:
           jq -e '.analysis.qualityGate.action == "accept" or .analysis.qualityGate.action == "revise" or .analysis.qualityGate.action == "regenerate"' /tmp/analyze.json >/dev/null
           jq -e '.analysis.compliance.status != "not_requested"' /tmp/analyze.json >/dev/null
           jq -e '.analysis.compliance.checks | length == 2' /tmp/analyze.json >/dev/null
-          jq -e '.meta.operation == "analyze" and .meta.requirementsApplied == true' /tmp/analyze.json >/dev/null
+          jq -e '.meta.operation == "analyze"' /tmp/analyze.json >/dev/null

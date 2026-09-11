@@ -53,6 +53,8 @@ Commercial endpoints:
 
 `/v1/analyze` returns standardized creative scores, first-three-second hook analysis, timestamped timeline diagnostics, retention risks, continuity and CTA assessment, ranked fixes, production-ready regeneration prompts, and platform-specific repurposing guidance.
 
+It also applies objective-specific scoring weights and returns a deterministic `accept`, `revise`, or `regenerate` quality gate so downstream agents can make a production decision without inventing their own threshold logic.
+
 Video scores are heuristic creative-quality assessments. They are not predictions or guarantees of views, retention, sales, ROAS, or virality.
 
 Uploaded media is stored privately; successfully analyzed assets are deleted immediately, while abandoned uploads are removed by the existing storage lifecycle. Exact spoken-word analysis can be improved by supplying a transcript because Nova video understanding analyzes visual frames rather than the video's audio track.

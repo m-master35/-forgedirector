@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: ForgeDirector Video Creative Intelligence API
-  version: 1.1.0
+  title: ForgeDirector AI Video QA & Creative Intelligence API
+  version: 1.2.0
   description: |
-    Analyze short-form video for hook strength, pacing, continuity, CTA clarity, platform fit, retention risks, and actionable fixes. ForgeDirector also creates structured video-production manifests, applies controlled revisions, and runs deterministic production QA.
+    Automated QA for generated short-form video. Upload a clip and receive objective-weighted creative scores, explicit production-spec compliance, a deterministic accept/revise/regenerate gate, timeline diagnostics, ranked fixes, and regeneration prompts. ForgeDirector also creates structured production manifests, applies controlled revisions, and runs deterministic manifest QA.
   contact:
     name: ForgeDirector
 paths:

@@ -155,6 +155,62 @@ function assertPlatform(value) {
   return platform;
 }
 
+function assertStringList(value, field, maxItems = 20, maxLength = 300) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    const error = new Error(`${field} must be an array of strings.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  if (value.length > maxItems) {
+    const error = new Error(`${field} cannot contain more than ${maxItems} items.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return value.map((item, index) => {
+    const text = String(item || '').trim();
+    if (!text || text.length > maxLength) {
+      const error = new Error(`${field}[${index}] must be 1-${maxLength} characters.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    return text;
+  });
+}
+
+function assertRequirements(value) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    const error = new Error('requirements must be a JSON object.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const requirements = {};
+  const fields = [
+    ['mustShow', 'requirements.mustShow'],
+    ['mustNotShow', 'requirements.mustNotShow'],
+    ['mustIncludeText', 'requirements.mustIncludeText'],
+    ['continuityRules', 'requirements.continuityRules'],
+  ];
+
+  for (const [key, field] of fields) {
+    const list = assertStringList(value[key], field);
+    if (list.length) requirements[key] = list;
+  }
+
+  if (value.ctaRequired !== undefined) {
+    if (typeof value.ctaRequired !== 'boolean') {
+      const error = new Error('requirements.ctaRequired must be a boolean.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (value.ctaRequired) requirements.ctaRequired = true;
+  }
+
+  return requirements;
+}
+
 function authorized(event, path) {
   if (!RAPIDAPI_PROXY_SECRET || !path.startsWith('/v1/')) return true;
   const supplied = header(event, 'x-rapidapi-proxy-secret');
@@ -203,6 +259,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
   const context = assertText(payload?.context, 'context', 3000, false);
   const transcript = assertText(payload?.transcript, 'transcript', 12000, false);
   const declaredDurationSeconds = assertDeclaredDuration(payload?.durationSeconds);
+  const requirements = assertRequirements(payload?.requirements);
 
   const prompt = buildVideoAnalysisPrompt({
     platform,
@@ -211,6 +268,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     context,
     transcript,
     declaredDurationSeconds,
+    requirements,
   });
 
   const result = await client.send(new ConverseCommand({
@@ -242,7 +300,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
   const rawText = extractText(result);
   const analysis = normalizeVideoAnalysis(
     JSON.parse(cleanModelJson(rawText)),
-    { objective },
+    { objective, requirements },
   );
 
   return {
@@ -250,6 +308,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     usage: result?.usage || null,
     platform,
     objective,
+    requirements,
   };
 }
 

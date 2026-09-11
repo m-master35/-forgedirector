@@ -55,7 +55,7 @@ Commercial endpoints:
 
 Video scores are heuristic creative-quality assessments. They are not predictions or guarantees of views, retention, sales, ROAS, or virality.
 
-Uploaded media is stored in a private S3 bucket and automatically expires after one day. Exact spoken-word analysis can be improved by supplying a transcript because Nova video understanding analyzes visual frames rather than the video's audio track.
+Uploaded media is stored privately; successfully analyzed assets are deleted immediately, while abandoned uploads are removed by the existing storage lifecycle. Exact spoken-word analysis can be improved by supplying a transcript because Nova video understanding analyzes visual frames rather than the video's audio track.
 
 See `commercial/openapi.yaml` for the API contract.
 

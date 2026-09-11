@@ -246,6 +246,24 @@ async function invokeDirector({ message, campaign }) {
   };
 }
 
+function parseVideoAnalysisModelJson(text) {
+  try {
+    const parsed = JSON.parse(cleanModelJson(text));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function hasSubstantiveVideoAnalysis(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (String(value.summary || '').trim()) return true;
+  if (Array.isArray(value.timeline) && value.timeline.length > 0) return true;
+  const scores = value.scores && typeof value.scores === 'object' ? value.scores : {};
+  return Object.values(scores).some((score) => Number.isFinite(Number(score)) && Number(score) > 0);
+}
+
 async function invokeVideoAnalysis({ asset, payload }) {
   if (!MODEL_ID) {
     const error = new Error('BEDROCK_MODEL_ID is not configured.');
@@ -271,7 +289,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     requirements,
   });
 
-  const result = await client.send(new ConverseCommand({
+  const sendAnalysis = async (promptText) => client.send(new ConverseCommand({
     modelId: MODEL_ID,
     system: [{ text: VIDEO_ANALYSIS_SYSTEM_PROMPT }],
     messages: [{
@@ -287,19 +305,38 @@ async function invokeVideoAnalysis({ asset, payload }) {
             },
           },
         },
-        { text: prompt },
+        { text: promptText },
       ],
     }],
     inferenceConfig: {
       maxTokens: 5000,
-      temperature: 0.2,
+      temperature: 0.1,
       topP: 0.9,
     },
   }));
 
-  const rawText = extractText(result);
+  let result = await sendAnalysis(prompt);
+  let rawText = extractText(result);
+  let parsed = parseVideoAnalysisModelJson(rawText);
+  let retryUsed = false;
+
+  if (!hasSubstantiveVideoAnalysis(parsed)) {
+    retryUsed = true;
+    result = await sendAnalysis(
+      `${prompt}\n\nIMPORTANT RECOVERY INSTRUCTION: The previous response was empty or non-substantive. Inspect the full supplied video carefully and return the complete JSON analysis. Do not return an empty object, empty summary, or all-zero scores unless the video itself is genuinely blank.`,
+    );
+    rawText = extractText(result);
+    parsed = parseVideoAnalysisModelJson(rawText);
+  }
+
+  if (!hasSubstantiveVideoAnalysis(parsed)) {
+    const error = new Error('The video was received but no reliable visual analysis could be produced. Re-encode the video to a standard MP4/H.264 or supported codec and try again.');
+    error.statusCode = 422;
+    throw error;
+  }
+
   const analysis = normalizeVideoAnalysis(
-    JSON.parse(cleanModelJson(rawText)),
+    parsed,
     { objective, requirements, hasTranscript: Boolean(transcript) },
   );
 
@@ -309,6 +346,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     platform,
     objective,
     requirements,
+    retryUsed,
   };
 }
 
@@ -402,6 +440,7 @@ export const handler = async (event) => {
             platform: result.platform,
             objective: result.objective,
             requirementsApplied: Object.keys(result.requirements || {}).length > 0,
+            analysisRetryUsed: result.retryUsed,
             asset: {
               id: asset.assetId,
               sizeBytes: asset.sizeBytes,

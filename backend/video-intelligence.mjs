@@ -273,15 +273,84 @@ function reconcileVerdictScore(score, verdict) {
   return score;
 }
 
-function normalizeTimeline(items) {
+const SPECULATIVE_PLATFORM_PATTERNS = [
+  /\balgorithm(?:ic)?\b/i,
+  /\bviral(?:ity)?\b/i,
+  /\btrend(?:ing|s)?\b/i,
+  /\bhashtags?\b/i,
+  /\bdiscoverability\b/i,
+  /\bshareability\b/i,
+  /\bboost(?:ing)?\s+(?:engagement|reach|views|discoverability)\b/i,
+  /\bguarantee(?:d)?\s+(?:engagement|reach|views|sales)\b/i,
+];
+
+function containsSpeculativePlatformClaim(value) {
+  const text = String(value || '');
+  return SPECULATIVE_PLATFORM_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function filterStrings(items) {
+  return asArray(items)
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .filter((item) => !containsSpeculativePlatformClaim(item));
+}
+
+function normalizeTimeline(items, hasTranscript) {
   return asArray(items).slice(0, 30).map((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return {};
     const purpose = String(item.purpose || 'other').trim().toLowerCase();
     return {
       ...item,
       purpose: ALLOWED_TIMELINE_PURPOSES.has(purpose) ? purpose : 'other',
+      speech: hasTranscript ? (item.speech ?? null) : null,
+      recommendations: filterStrings(item.recommendations),
     };
   });
+}
+
+function sanitizeFixes(items) {
+  return asArray(items)
+    .slice(0, 12)
+    .filter((fix) => {
+      const text = `${fix?.issue || ''} ${fix?.action || ''}`;
+      return !containsSpeculativePlatformClaim(text);
+    });
+}
+
+function sanitizeRegenerationPrompts(items) {
+  return asArray(items)
+    .slice(0, 12)
+    .filter((item) => {
+      const text = `${item?.reason || ''} ${item?.prompt || ''}`;
+      return !containsSpeculativePlatformClaim(text);
+    });
+}
+
+function sanitizeRepurpose(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    tiktok: filterStrings(source.tiktok),
+    instagramReels: filterStrings(source.instagramReels),
+    youtubeShorts: filterStrings(source.youtubeShorts),
+  };
+}
+
+function sanitizePlatformAssessment(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    ...source,
+    reasons: filterStrings(source.reasons),
+  };
+}
+
+function normalizeHook(value, hasTranscript) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    ...source,
+    spokenHook: hasTranscript ? (source.spokenHook ?? null) : null,
+    issues: filterStrings(source.issues),
+  };
 }
 
 function objectiveWeights(objective) {
@@ -454,7 +523,11 @@ function qualityGate(scores, retentionRisks, fixes, compliance) {
   };
 }
 
-export function normalizeVideoAnalysis(value, { objective = 'engagement', requirements = {} } = {}) {
+export function normalizeVideoAnalysis(value, {
+  objective = 'engagement',
+  requirements = {},
+  hasTranscript = false,
+} = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Video analysis model returned an invalid JSON object.');
   }
@@ -475,14 +548,19 @@ export function normalizeVideoAnalysis(value, { objective = 'engagement', requir
   );
 
   const scores = { overall, ...dimensionScores };
-  const timeline = normalizeTimeline(value.timeline);
+  const timeline = normalizeTimeline(value.timeline, hasTranscript);
   const retentionRisks = asArray(value.retentionRisks).slice(0, 12);
-  const fixes = asArray(value.fixes).slice(0, 12);
+  const fixes = sanitizeFixes(value.fixes);
+  const regenerationPrompts = sanitizeRegenerationPrompts(value.regenerationPrompts);
   const compliance = normalizeCompliance(value, requirements);
+  const limitations = filterStrings(value.limitations);
+  if (!hasTranscript) {
+    limitations.push('Audio was not analyzed; supply a transcript for spoken-word analysis.');
+  }
 
   return {
-    analysisVersion: '1.2',
-    scoringVersion: 'fd-shortform-v3',
+    analysisVersion: '1.3',
+    scoringVersion: 'fd-shortform-v4',
     scoring: {
       objective: normalizedObjective,
       weights,
@@ -492,17 +570,15 @@ export function normalizeVideoAnalysis(value, { objective = 'engagement', requir
     scores,
     compliance,
     qualityGate: qualityGate(scores, retentionRisks, fixes, compliance),
-    hook: value.hook && typeof value.hook === 'object' ? value.hook : {},
+    hook: normalizeHook(value.hook, hasTranscript),
     timeline,
     retentionRisks,
     continuity: value.continuity && typeof value.continuity === 'object' ? value.continuity : {},
     cta: value.cta && typeof value.cta === 'object' ? value.cta : {},
-    platformAssessment: value.platformAssessment && typeof value.platformAssessment === 'object'
-      ? value.platformAssessment
-      : {},
+    platformAssessment: sanitizePlatformAssessment(value.platformAssessment),
     fixes,
-    regenerationPrompts: asArray(value.regenerationPrompts).slice(0, 12),
-    repurpose: value.repurpose && typeof value.repurpose === 'object' ? value.repurpose : {},
-    limitations: asArray(value.limitations).slice(0, 10),
+    regenerationPrompts,
+    repurpose: sanitizeRepurpose(value.repurpose),
+    limitations: limitations.slice(0, 10),
   };
 }

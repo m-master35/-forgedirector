@@ -31,6 +31,34 @@ The v0.1 prototype includes:
 - Responsive mobile/desktop UI
 - One-click judging/demo sequence
 
+
+## Commercial video-intelligence API
+
+The commercial API now extends ForgeDirector beyond planning into **video creative intelligence**.
+
+The intended production loop is:
+
+```text
+PLAN → CREATE → ANALYZE → FIX → REGENERATE
+```
+
+Commercial endpoints:
+
+- `POST /v1/uploads` — create a short-lived private upload URL for a video.
+- `POST /v1/analyze` — analyze an uploaded short-form video with Amazon Nova multimodal understanding.
+- `POST /v1/plan` — create a structured production manifest from a brief.
+- `POST /v1/revise` — revise selected campaign decisions while preserving unrelated state.
+- `POST /v1/qa` — run deterministic production QA.
+- `GET /health` — inspect API status and limits.
+
+`/v1/analyze` returns standardized creative scores, first-three-second hook analysis, timestamped timeline diagnostics, retention risks, continuity and CTA assessment, ranked fixes, production-ready regeneration prompts, and platform-specific repurposing guidance.
+
+Video scores are heuristic creative-quality assessments. They are not predictions or guarantees of views, retention, sales, ROAS, or virality.
+
+Uploaded media is stored in a private S3 bucket and automatically expires after one day. Exact spoken-word analysis can be improved by supplying a transcript because Nova video understanding analyzes visual frames rather than the video's audio track.
+
+See `commercial/openapi.yaml` for the API contract.
+
 ## Run locally
 
 No build step is required.

@@ -1,6 +1,12 @@
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 import { SYSTEM_PROMPT, buildUserPrompt } from './director-prompt.mjs';
 import { evaluateCampaign } from './qa.mjs';
+import { createVideoUpload, resolveVideoAsset } from './storage.mjs';
+import {
+  VIDEO_ANALYSIS_SYSTEM_PROMPT,
+  buildVideoAnalysisPrompt,
+  normalizeVideoAnalysis,
+} from './video-intelligence.mjs';
 
 const client = new BedrockRuntimeClient({
   region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION,
@@ -9,8 +15,8 @@ const client = new BedrockRuntimeClient({
 const MODEL_ID = process.env.BEDROCK_MODEL_ID;
 const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET || '';
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 120000);
+const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_BYTES || 31457280);
 
-// CORS is configured at the Lambda Function URL layer to avoid duplicate response headers.
 function header(event, name) {
   const target = name.toLowerCase();
   const headers = event?.headers || {};
@@ -55,8 +61,8 @@ function parseBody(event) {
 
 function cleanModelJson(text) {
   return String(text || '')
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
+    .replace(/^\`\`\`(?:json)?\s*/i, '')
+    .replace(/\s*\`\`\`$/i, '')
     .trim();
 }
 
@@ -82,9 +88,9 @@ function validateManifest(manifest) {
   return manifest;
 }
 
-function assertText(value, field, max = 6000) {
+function assertText(value, field, max = 6000, required = true) {
   const text = String(value || '').trim();
-  if (!text) {
+  if (required && !text) {
     const error = new Error(`${field} is required.`);
     error.statusCode = 400;
     throw error;
@@ -104,6 +110,49 @@ function assertCampaign(value) {
     throw error;
   }
   return value;
+}
+
+function assertDeclaredDuration(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const duration = Number(value);
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 120) {
+    const error = new Error('durationSeconds must be between 1 and 120.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return Math.round(duration * 10) / 10;
+}
+
+function assertObjective(value) {
+  const objective = String(value || 'engagement').trim().toLowerCase();
+  const allowed = new Set(['engagement', 'conversion', 'awareness', 'education', 'app-install', 'lead-generation']);
+  if (!allowed.has(objective)) {
+    const error = new Error('objective must be engagement, conversion, awareness, education, app-install, or lead-generation.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return objective;
+}
+
+function assertPlatform(value) {
+  const source = String(value || 'General').trim().toLowerCase();
+  const platforms = new Map([
+    ['tiktok', 'TikTok'],
+    ['instagram reels', 'Instagram Reels'],
+    ['instagram', 'Instagram Reels'],
+    ['reels', 'Instagram Reels'],
+    ['youtube shorts', 'YouTube Shorts'],
+    ['youtube', 'YouTube Shorts'],
+    ['shorts', 'YouTube Shorts'],
+    ['general', 'General'],
+  ]);
+  const platform = platforms.get(source);
+  if (!platform) {
+    const error = new Error('platform must be TikTok, Instagram Reels, YouTube Shorts, or General.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return platform;
 }
 
 function authorized(event, path) {
@@ -141,6 +190,66 @@ async function invokeDirector({ message, campaign }) {
   };
 }
 
+async function invokeVideoAnalysis({ asset, payload }) {
+  if (!MODEL_ID) {
+    const error = new Error('BEDROCK_MODEL_ID is not configured.');
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const platform = assertPlatform(payload?.platform);
+  const objective = assertObjective(payload?.objective);
+  const audience = assertText(payload?.audience, 'audience', 1000, false);
+  const context = assertText(payload?.context, 'context', 3000, false);
+  const transcript = assertText(payload?.transcript, 'transcript', 12000, false);
+  const declaredDurationSeconds = assertDeclaredDuration(payload?.durationSeconds);
+
+  const prompt = buildVideoAnalysisPrompt({
+    platform,
+    objective,
+    audience,
+    context,
+    transcript,
+    declaredDurationSeconds,
+  });
+
+  const result = await client.send(new ConverseCommand({
+    modelId: MODEL_ID,
+    system: [{ text: VIDEO_ANALYSIS_SYSTEM_PROMPT }],
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          video: {
+            format: asset.format,
+            source: {
+              s3Location: {
+                uri: asset.uri,
+              },
+            },
+          },
+        },
+        { text: prompt },
+      ],
+    }],
+    inferenceConfig: {
+      maxTokens: 5200,
+      temperature: 0.2,
+      topP: 0.9,
+    },
+  }));
+
+  const rawText = extractText(result);
+  const analysis = normalizeVideoAnalysis(JSON.parse(cleanModelJson(rawText)));
+
+  return {
+    analysis,
+    usage: result?.usage || null,
+    platform,
+    objective,
+  };
+}
+
 function planMessage(payload) {
   const brief = assertText(payload?.brief ?? payload?.message, 'brief');
   const constraints = payload?.constraints && typeof payload.constraints === 'object'
@@ -157,13 +266,19 @@ function revisionMessage(payload) {
 function apiInfo() {
   return {
     name: 'ForgeDirector Video Creative Intelligence API',
-    version: '1.0.0',
+    version: '1.1.0',
     status: 'ok',
     endpoints: {
+      upload: 'POST /v1/uploads',
+      analyze: 'POST /v1/analyze',
       plan: 'POST /v1/plan',
       revise: 'POST /v1/revise',
       qa: 'POST /v1/qa',
       health: 'GET /health',
+    },
+    limits: {
+      maxVideoBytes: MAX_VIDEO_BYTES,
+      maxVideoDurationSeconds: 120,
     },
   };
 }
@@ -191,6 +306,51 @@ export const handler = async (event) => {
   }
 
   try {
+    if (method === 'POST' && path === '/v1/uploads') {
+      const contentType = assertText(payload?.contentType, 'contentType', 100);
+      const declaredSize = payload?.sizeBytes === undefined ? null : Number(payload.sizeBytes);
+      if (declaredSize !== null && (!Number.isFinite(declaredSize) || declaredSize <= 0 || declaredSize > MAX_VIDEO_BYTES)) {
+        const error = new Error(`sizeBytes must be between 1 and ${MAX_VIDEO_BYTES}.`);
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const assetId = crypto.randomUUID();
+      const upload = await createVideoUpload({ assetId, contentType });
+      return response(200, {
+        upload,
+        next: {
+          endpoint: 'POST /v1/analyze',
+          body: { assetId },
+        },
+        requestId,
+      });
+    }
+
+    if (method === 'POST' && path === '/v1/analyze') {
+      const assetId = assertText(payload?.assetId, 'assetId', 100);
+      const asset = await resolveVideoAsset(assetId);
+      const result = await invokeVideoAnalysis({ asset, payload });
+
+      return response(200, {
+        analysis: result.analysis,
+        meta: {
+          operation: 'analyze',
+          modelId: MODEL_ID,
+          platform: result.platform,
+          objective: result.objective,
+          asset: {
+            id: asset.assetId,
+            sizeBytes: asset.sizeBytes,
+            contentType: asset.contentType,
+          },
+          usage: result.usage,
+          scoringNotice: 'Scores are heuristic creative-quality assessments, not predictions of views, sales, retention, ROAS, or virality.',
+          requestId,
+        },
+      });
+    }
+
     if (method === 'POST' && path === '/v1/qa') {
       const campaign = assertCampaign(payload?.campaign ?? payload);
       return response(200, {

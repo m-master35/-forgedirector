@@ -16,17 +16,50 @@ Parameters:
     Type: String
     Default: '*'
     Description: CORS origin. RapidAPI server-to-server calls do not require browser CORS.
+  MaxVideoBytes:
+    Type: Number
+    Default: 31457280
+    Description: Maximum uploaded video size accepted for analysis (30 MiB)
 
 Globals:
   Function:
     Runtime: nodejs22.x
     Architectures:
       - arm64
-    Timeout: 40
-    MemorySize: 512
+    Timeout: 120
+    MemorySize: 1024
     Tracing: Active
 
 Resources:
+  VideoAssetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteTemporaryVideoAssets
+            Status: Enabled
+            ExpirationInDays: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - PUT
+            AllowedHeaders:
+              - '*'
+            ExposedHeaders:
+              - ETag
+            MaxAge: 900
+
   CreativeIntelligenceFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -38,6 +71,9 @@ Resources:
           RAPIDAPI_PROXY_SECRET: !Ref RapidApiProxySecret
           ALLOWED_ORIGIN: !Ref AllowedOrigin
           MAX_BODY_BYTES: '120000'
+          MAX_VIDEO_BYTES: !Ref MaxVideoBytes
+          UPLOAD_URL_TTL_SECONDS: '900'
+          VIDEO_BUCKET: !Ref VideoAssetBucket
       Policies:
         - Statement:
             - Effect: Allow
@@ -45,6 +81,12 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource: '*'
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+              Resource: !Sub '${VideoAssetBucket.Arn}/*'
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -74,3 +116,6 @@ Outputs:
   CommercialApiBaseUrl:
     Description: Base URL to configure in RapidAPI Studio
     Value: !GetAtt CreativeIntelligenceFunctionUrl.FunctionUrl
+  VideoAssetBucketName:
+    Description: Private temporary bucket for ForgeDirector video-analysis uploads
+    Value: !Ref VideoAssetBucket

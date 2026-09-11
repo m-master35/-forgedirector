@@ -67,6 +67,12 @@ paths:
               audience: Young professionals
               durationSeconds: 30
               context: Premium productivity app. Keep recommendations credible and direct.
+              requirements:
+                mustShow: [Brand logo, App interface]
+                mustNotShow: [Competitor logos]
+                mustIncludeText: [Start free]
+                continuityRules: [Use the same lead character throughout]
+                ctaRequired: true
       responses:
         '200':
           description: Structured video analysis
@@ -277,6 +283,36 @@ components:
           type: string
           maxLength: 12000
           description: Optional supplied transcript. Use this when exact spoken-word analysis is important.
+        requirements:
+          type: object
+          description: Optional explicit production rules to verify against the video.
+          properties:
+            mustShow:
+              type: array
+              maxItems: 20
+              items:
+                type: string
+                maxLength: 300
+            mustNotShow:
+              type: array
+              maxItems: 20
+              items:
+                type: string
+                maxLength: 300
+            mustIncludeText:
+              type: array
+              maxItems: 20
+              items:
+                type: string
+                maxLength: 300
+            continuityRules:
+              type: array
+              maxItems: 20
+              items:
+                type: string
+                maxLength: 300
+            ctaRequired:
+              type: boolean
 
     AnalyzeResponse:
       type: object
@@ -290,7 +326,7 @@ components:
 
     VideoAnalysis:
       type: object
-      required: [analysisVersion, scoringVersion, scoring, summary, scores, qualityGate, timeline, fixes, regenerationPrompts]
+      required: [analysisVersion, scoringVersion, scoring, summary, scores, compliance, qualityGate, timeline, fixes, regenerationPrompts]
       properties:
         analysisVersion:
           type: string
@@ -350,6 +386,40 @@ components:
               type: integer
               minimum: 0
               maximum: 100
+        compliance:
+          type: object
+          required: [status, passed, failedCount, uncertainCount, checks]
+          properties:
+            status:
+              type: string
+              enum: [not_requested, pass, fail, needs_review]
+            passed:
+              type: boolean
+              nullable: true
+            failedCount:
+              type: integer
+              minimum: 0
+            uncertainCount:
+              type: integer
+              minimum: 0
+            checks:
+              type: array
+              items:
+                type: object
+                required: [type, rule, status, evidence, timestampSeconds]
+                properties:
+                  type:
+                    type: string
+                  rule:
+                    type: string
+                  status:
+                    type: string
+                    enum: [pass, fail, uncertain]
+                  evidence:
+                    type: string
+                  timestampSeconds:
+                    type: number
+                    nullable: true
         qualityGate:
           type: object
           required: [action, confidence, blockers, reasons, thresholds]

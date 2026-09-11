@@ -290,7 +290,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     requirements,
   });
 
-  const sendAnalysis = async (modelId, promptText) => client.send(new ConverseCommand({
+  const invokeAnalysisOnce = async (modelId, promptText) => client.send(new ConverseCommand({
     modelId,
     system: [{ text: VIDEO_ANALYSIS_SYSTEM_PROMPT }],
     messages: [{
@@ -315,6 +315,26 @@ async function invokeVideoAnalysis({ asset, payload }) {
       topP: 0.9,
     },
   }));
+
+  const sendAnalysis = async (modelId, promptText) => {
+    const retryable = new Set([
+      'ThrottlingException',
+      'ServiceUnavailableException',
+      'InternalServerException',
+      'ModelTimeoutException',
+      'ModelNotReadyException',
+    ]);
+
+    try {
+      return await invokeAnalysisOnce(modelId, promptText);
+    } catch (error) {
+      const name = String(error?.name || error?.Code || '');
+      const status = Number(error?.$metadata?.httpStatusCode || 0);
+      if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      return invokeAnalysisOnce(modelId, promptText);
+    }
+  };
 
   const continuitySensitive = Array.isArray(requirements?.continuityRules)
     && requirements.continuityRules.length > 0;

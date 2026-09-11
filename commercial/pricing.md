@@ -1,30 +1,51 @@
 # Launch pricing — ForgeDirector Video Creative Intelligence API
 
-Goal: reach the first paid users quickly while protecting AWS/Bedrock spend during validation.
+Goal: reach paid validation quickly while protecting AWS/Bedrock spend and keeping the offer easy to understand.
 
-RapidAPI supports up to four subscription tiers. Launch with hard monthly limits rather than overage billing until real request costs and conversion behaviour are measured.
+## Current RapidAPI plans
 
-| Tier | Monthly price | Included requests | Purpose |
-| --- | ---: | ---: | --- |
-| BASIC | $0 | 10 | Let a developer test the API end-to-end. |
-| PRO | $19 | 150 | Solo builders and small automation workflows. |
-| ULTRA | $49 | 600 | Production prototypes, agencies, and creator tools. |
-| MEGA | $99 | 1,500 | Heavier integrations and SaaS products. |
+| Tier | Monthly price | RapidAPI requests | Approx. maximum full video analyses* | Purpose |
+| --- | ---: | ---: | ---: | --- |
+| BASIC | $0 | 10 | ~5 | Let a developer test real videos end-to-end. |
+| PRO | $19 | 100 | ~50 | Solo builders and production prototypes. |
+| ULTRA | $49 | 500 | ~250 | Creator tools, ad workflows, and regular production use. |
+| MEGA | $99 | 1,500 | ~750 | Heavier SaaS and automation integrations. |
+
+\* A normal full-analysis flow uses one API request to create the temporary upload URL and one API request to analyze the uploaded asset. The direct PUT to S3 is not a ForgeDirector API request. Planning/revision/QA calls also consume requests under the simple launch quota.
+
+ULTRA is the recommended launch plan.
+
+## Cost protection
+
+ForgeDirector currently limits videos to 30 MiB and declares a 120-second short-form duration ceiling. Temporary uploads expire automatically after one day.
+
+Amazon Nova 2 Lite samples short videos at roughly one frame per second. AWS documentation estimates about 2,880 input tokens for a 10-second video and 8,640 input tokens for a 30-second video. At the published Nova 2 Lite text/video token rates used for launch modeling, video-input cost is small relative to the returned analysis text.
+
+Use the actual Bedrock `usage` object returned in ForgeDirector responses to measure production cost before changing quotas.
 
 ## Launch rules
 
-- Use hard limits on every tier initially. No automatic overages.
-- Count `/v1/plan`, `/v1/revise`, and `/v1/qa` as billable requests at launch for simplicity.
-- `/health` should not be used as the quota object.
-- Revisit quotas after at least 30 days of real request-cost data.
-- Do not reduce prices for the first few users unless marketplace data shows a clear conversion problem.
+- Keep hard monthly RapidAPI request limits.
+- No automatic overages at initial launch.
+- Keep BASIC intentionally small.
+- Do not market scores as predictions of views, retention, sales, ROAS, or virality.
+- Benchmark at least 20 representative 10–60 second videos before changing quotas.
+- If video analysis becomes the dominant paid usage, migrate from generic request quotas to a dedicated `Video Analyses` billing object so upload-ticket calls do not consume customer analysis credits.
+- Keep uploaded media private and ephemeral.
 
 ## R5,000/month target
 
-The revenue target is deliberately achievable without large scale. Examples before marketplace fees, payment fees, tax, and cloud costs:
+RapidAPI currently retains a marketplace fee from provider revenue, so the commercial target should be reached with a small number of paid integrations rather than high free volume.
 
-- 7 ULTRA + 1 PRO = $362 MRR.
-- 4 ULTRA + 6 PRO = $310 MRR.
-- 2 MEGA + 3 ULTRA = $345 MRR.
+At the current price points, roughly ten ULTRA customers produce $490 gross monthly marketplace revenue before RapidAPI fees, AWS, PayPal, and tax.
 
-The objective is not to maximize call volume. It is to acquire a small number of developers for whom structured creative planning and revision-aware state save meaningful development time.
+The commercial thesis is now stronger than the original prompt-wrapper version: paid users are buying a repeatable video-ingestion and creative-analysis contract, not merely a system prompt.
+
+## Repricing trigger
+
+Do not change the user-facing plans again until both are true:
+
+1. Real video-analysis calls have been benchmarked for cost and latency.
+2. At least one external developer has used the output and confirmed which fields are valuable enough to integrate.
+
+If users mostly consume `/v1/analyze`, consider a later plan structure based on analysis credits rather than raw requests.

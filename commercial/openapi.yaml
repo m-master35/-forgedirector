@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: ForgeDirector Video Creative Intelligence API
-  version: 1.0.0
+  version: 1.1.0
   description: |
-    Turn short creative briefs into structured video-production manifests, revise existing campaigns without losing unrelated decisions, and run deterministic production QA.
+    Analyze short-form video for hook strength, pacing, continuity, CTA clarity, platform fit, retention risks, and actionable fixes. ForgeDirector also creates structured video-production manifests, applies controlled revisions, and runs deterministic production QA.
   contact:
     name: ForgeDirector
 paths:
@@ -18,6 +18,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+
+  /v1/uploads:
+    post:
+      operationId: createVideoUpload
+      summary: Create a temporary private upload URL for a video
+      description: |
+        Returns a short-lived presigned S3 PUT URL. Upload the video directly to that URL using the returned Content-Type header, then pass the returned assetId to /v1/analyze. Temporary assets expire automatically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadRequest'
+            example:
+              contentType: video/mp4
+              sizeBytes: 8421300
+      responses:
+        '200':
+          description: Upload URL created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/EngineError'
+
+  /v1/analyze:
+    post:
+      operationId: analyzeVideo
+      summary: Analyze a short-form video and return structured creative intelligence
+      description: |
+        Uses Amazon Nova multimodal video understanding to inspect the uploaded video and return standardized creative scores, first-three-second hook analysis, scene/timeline issues, retention risks, continuity and CTA assessment, ranked fixes, regeneration prompts, and repurposing guidance. Scores are heuristic creative-quality assessments rather than predictions of views, retention, sales, ROAS, or virality.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequest'
+            example:
+              assetId: 8f0f6a79-14c8-4cc9-9bde-272d25dd7070
+              platform: TikTok
+              objective: conversion
+              audience: Young professionals
+              durationSeconds: 30
+              context: Premium productivity app. Keep recommendations credible and direct.
+      responses:
+        '200':
+          description: Structured video analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Uploaded asset was not found or is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Uploaded video exceeds the configured analysis limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          $ref: '#/components/responses/EngineError'
+
   /v1/plan:
     post:
       operationId: planCampaign
@@ -50,6 +125,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '502':
           $ref: '#/components/responses/EngineError'
+
   /v1/revise:
     post:
       operationId: reviseCampaign
@@ -74,6 +150,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '502':
           $ref: '#/components/responses/EngineError'
+
   /v1/qa:
     post:
       operationId: checkCampaign
@@ -100,6 +177,7 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
 components:
   responses:
     BadRequest:
@@ -120,7 +198,188 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+    UploadRequest:
+      type: object
+      required: [contentType]
+      properties:
+        contentType:
+          type: string
+          enum: [video/mp4, video/quicktime, video/x-matroska, video/webm]
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 31457280
+          description: Optional declared file size. The uploaded object is verified again before analysis.
+
+    UploadResponse:
+      type: object
+      required: [upload, next, requestId]
+      properties:
+        upload:
+          type: object
+          required: [assetId, uploadUrl, method, headers, expiresInSeconds, maxBytes, format]
+          properties:
+            assetId:
+              type: string
+              format: uuid
+            uploadUrl:
+              type: string
+              format: uri
+            method:
+              type: string
+              enum: [PUT]
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+            expiresInSeconds:
+              type: integer
+            maxBytes:
+              type: integer
+            format:
+              type: string
+        next:
+          type: object
+          additionalProperties: true
+        requestId:
+          type: string
+
+    AnalyzeRequest:
+      type: object
+      required: [assetId]
+      properties:
+        assetId:
+          type: string
+          format: uuid
+          description: assetId returned by POST /v1/uploads after the video has been uploaded.
+        platform:
+          type: string
+          enum: [TikTok, Instagram Reels, YouTube Shorts, General]
+          default: General
+        objective:
+          type: string
+          enum: [engagement, conversion, awareness, education, app-install, lead-generation]
+          default: engagement
+        audience:
+          type: string
+          maxLength: 1000
+        durationSeconds:
+          type: number
+          minimum: 1
+          maximum: 120
+        context:
+          type: string
+          maxLength: 3000
+          description: Optional brand, product, campaign, or creative context.
+        transcript:
+          type: string
+          maxLength: 12000
+          description: Optional supplied transcript. Use this when exact spoken-word analysis is important.
+
+    AnalyzeResponse:
+      type: object
+      required: [analysis, meta]
+      properties:
+        analysis:
+          $ref: '#/components/schemas/VideoAnalysis'
+        meta:
+          type: object
+          additionalProperties: true
+
+    VideoAnalysis:
+      type: object
+      required: [analysisVersion, scoringVersion, summary, scores, timeline, fixes, regenerationPrompts]
+      properties:
+        analysisVersion:
+          type: string
+        scoringVersion:
+          type: string
+        summary:
+          type: string
+        creativeAngle:
+          type: string
+        scores:
+          type: object
+          required: [overall, hook, pacing, clarity, visualQuality, continuity, cta, platformFit, conversionReadiness]
+          properties:
+            overall:
+              type: integer
+              minimum: 0
+              maximum: 100
+            hook:
+              type: integer
+              minimum: 0
+              maximum: 100
+            pacing:
+              type: integer
+              minimum: 0
+              maximum: 100
+            clarity:
+              type: integer
+              minimum: 0
+              maximum: 100
+            visualQuality:
+              type: integer
+              minimum: 0
+              maximum: 100
+            continuity:
+              type: integer
+              minimum: 0
+              maximum: 100
+            cta:
+              type: integer
+              minimum: 0
+              maximum: 100
+            platformFit:
+              type: integer
+              minimum: 0
+              maximum: 100
+            conversionReadiness:
+              type: integer
+              minimum: 0
+              maximum: 100
+        hook:
+          type: object
+          additionalProperties: true
+        timeline:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        retentionRisks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        continuity:
+          type: object
+          additionalProperties: true
+        cta:
+          type: object
+          additionalProperties: true
+        platformAssessment:
+          type: object
+          additionalProperties: true
+        fixes:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        regenerationPrompts:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        repurpose:
+          type: object
+          additionalProperties: true
+        limitations:
+          type: array
+          items:
+            type: string
+
     PlanRequest:
       type: object
       required: [brief]
@@ -133,6 +392,7 @@ components:
           type: object
           additionalProperties: true
           description: Optional structured creative constraints such as platform, durationSeconds, aspectRatio, audience, tone, or product rules.
+
     ReviseRequest:
       type: object
       required: [instruction, campaign]
@@ -143,6 +403,7 @@ components:
           description: What should change in the existing campaign.
         campaign:
           $ref: '#/components/schemas/Campaign'
+
     CampaignResponse:
       type: object
       required: [campaign, qa, meta]
@@ -164,6 +425,7 @@ components:
               additionalProperties: true
             requestId:
               type: string
+
     Campaign:
       type: object
       required: [summary, audience, platform, aspectRatio, durationSeconds, continuity, scenes, changeSummary]
@@ -199,6 +461,7 @@ components:
             $ref: '#/components/schemas/Scene'
         changeSummary:
           type: string
+
     Scene:
       type: object
       required: [id, durationSeconds, visualDirection, voiceover, generationPrompt]
@@ -215,6 +478,7 @@ components:
           type: string
         generationPrompt:
           type: string
+
     QAResponse:
       type: object
       properties:
@@ -222,6 +486,7 @@ components:
           $ref: '#/components/schemas/QAResult'
         requestId:
           type: string
+
     QAResult:
       type: object
       required: [score, passed, checks, issues]
@@ -244,6 +509,7 @@ components:
           items:
             type: object
             additionalProperties: true
+
     HealthResponse:
       type: object
       properties:
@@ -257,8 +523,12 @@ components:
           type: object
           additionalProperties:
             type: string
+        limits:
+          type: object
+          additionalProperties: true
         requestId:
           type: string
+
     ErrorResponse:
       type: object
       properties:

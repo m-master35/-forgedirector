@@ -16,16 +16,79 @@ const SCORE_KEYS = [
   'conversionReadiness',
 ];
 
-const SCORE_WEIGHTS = {
-  hook: 0.20,
-  pacing: 0.15,
-  clarity: 0.15,
-  visualQuality: 0.10,
-  continuity: 0.10,
-  cta: 0.10,
-  platformFit: 0.10,
-  conversionReadiness: 0.10,
+const SCORE_WEIGHTS_BY_OBJECTIVE = {
+  engagement: {
+    hook: 0.25,
+    pacing: 0.20,
+    clarity: 0.10,
+    visualQuality: 0.10,
+    continuity: 0.05,
+    cta: 0.05,
+    platformFit: 0.20,
+    conversionReadiness: 0.05,
+  },
+  conversion: {
+    hook: 0.15,
+    pacing: 0.10,
+    clarity: 0.15,
+    visualQuality: 0.10,
+    continuity: 0.05,
+    cta: 0.20,
+    platformFit: 0.10,
+    conversionReadiness: 0.15,
+  },
+  awareness: {
+    hook: 0.20,
+    pacing: 0.15,
+    clarity: 0.20,
+    visualQuality: 0.15,
+    continuity: 0.10,
+    cta: 0.05,
+    platformFit: 0.10,
+    conversionReadiness: 0.05,
+  },
+  education: {
+    hook: 0.10,
+    pacing: 0.15,
+    clarity: 0.30,
+    visualQuality: 0.10,
+    continuity: 0.10,
+    cta: 0.05,
+    platformFit: 0.10,
+    conversionReadiness: 0.10,
+  },
+  'app-install': {
+    hook: 0.15,
+    pacing: 0.10,
+    clarity: 0.15,
+    visualQuality: 0.10,
+    continuity: 0.05,
+    cta: 0.20,
+    platformFit: 0.10,
+    conversionReadiness: 0.15,
+  },
+  'lead-generation': {
+    hook: 0.10,
+    pacing: 0.10,
+    clarity: 0.20,
+    visualQuality: 0.10,
+    continuity: 0.05,
+    cta: 0.20,
+    platformFit: 0.10,
+    conversionReadiness: 0.15,
+  },
 };
+
+const ALLOWED_TIMELINE_PURPOSES = new Set([
+  'hook',
+  'problem',
+  'proof',
+  'demo',
+  'benefit',
+  'transition',
+  'cta',
+  'other',
+]);
 
 export const VIDEO_ANALYSIS_SYSTEM_PROMPT = `You are ForgeDirector Video Intelligence, an expert short-form video creative analyst.
 
@@ -179,34 +242,120 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-export function normalizeVideoAnalysis(value) {
+function normalizeTimeline(items) {
+  return asArray(items).slice(0, 30).map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return {};
+    const purpose = String(item.purpose || 'other').trim().toLowerCase();
+    return {
+      ...item,
+      purpose: ALLOWED_TIMELINE_PURPOSES.has(purpose) ? purpose : 'other',
+    };
+  });
+}
+
+function objectiveWeights(objective) {
+  return SCORE_WEIGHTS_BY_OBJECTIVE[objective] || SCORE_WEIGHTS_BY_OBJECTIVE.engagement;
+}
+
+function qualityGate(scores, retentionRisks, fixes) {
+  const highRisks = retentionRisks.filter((risk) => String(risk?.severity || '').toLowerCase() === 'high');
+  const highImpactFixes = fixes.filter((fix) => String(fix?.impact || '').toLowerCase() === 'high');
+  const blockers = [];
+
+  if (scores.visualQuality < 35) blockers.push('visual_quality_below_35');
+  if (scores.continuity < 30) blockers.push('continuity_below_30');
+  if (scores.hook < 25 && scores.pacing < 40) blockers.push('opening_execution_too_weak');
+  if (highRisks.length >= 3) blockers.push('multiple_high_retention_risks');
+
+  let action = 'revise';
+  if (scores.overall < 45 || blockers.length > 0) {
+    action = 'regenerate';
+  } else if (
+    scores.overall >= 80
+    && scores.hook >= 60
+    && scores.clarity >= 60
+    && scores.platformFit >= 60
+    && highRisks.length === 0
+  ) {
+    action = 'accept';
+  }
+
+  const reasons = [];
+  if (action === 'accept') {
+    reasons.push('Overall creative-quality score cleared the acceptance threshold.');
+    reasons.push('Hook, clarity, and platform-fit floors were met with no high-severity retention risk.');
+  } else if (action === 'regenerate') {
+    reasons.push('One or more core production-quality thresholds require a material rebuild.');
+    if (scores.overall < 45) reasons.push('Overall creative-quality score is below 45.');
+    if (blockers.length) reasons.push(`Blocking checks: ${blockers.join(', ')}.`);
+  } else {
+    reasons.push('The asset is structurally usable but has material issues worth correcting before acceptance.');
+    if (highImpactFixes.length) reasons.push(`${highImpactFixes.length} high-impact fix(es) were identified.`);
+  }
+
+  const distance = action === 'accept'
+    ? scores.overall - 80
+    : action === 'regenerate'
+      ? 45 - scores.overall
+      : Math.min(Math.abs(scores.overall - 45), Math.abs(80 - scores.overall));
+
+  const confidence = distance >= 15 || blockers.length >= 2 ? 'high' : distance >= 7 ? 'medium' : 'low';
+
+  return {
+    action,
+    confidence,
+    blockers,
+    reasons,
+    thresholds: {
+      acceptOverallAtLeast: 80,
+      regenerateOverallBelow: 45,
+      acceptHookAtLeast: 60,
+      acceptClarityAtLeast: 60,
+      acceptPlatformFitAtLeast: 60,
+    },
+  };
+}
+
+export function normalizeVideoAnalysis(value, { objective = 'engagement' } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Video analysis model returned an invalid JSON object.');
   }
 
+  const normalizedObjective = SCORE_WEIGHTS_BY_OBJECTIVE[objective] ? objective : 'engagement';
+  const weights = objectiveWeights(normalizedObjective);
   const sourceScores = value.scores && typeof value.scores === 'object' ? value.scores : {};
-  const scores = {};
-  for (const key of SCORE_KEYS) scores[key] = boundedScore(sourceScores[key]);
+  const dimensionScores = {};
+  for (const key of SCORE_KEYS) dimensionScores[key] = boundedScore(sourceScores[key]);
 
   const overall = Math.round(
-    SCORE_KEYS.reduce((sum, key) => sum + scores[key] * SCORE_WEIGHTS[key], 0),
+    SCORE_KEYS.reduce((sum, key) => sum + dimensionScores[key] * weights[key], 0),
   );
 
+  const scores = { overall, ...dimensionScores };
+  const timeline = normalizeTimeline(value.timeline);
+  const retentionRisks = asArray(value.retentionRisks).slice(0, 12);
+  const fixes = asArray(value.fixes).slice(0, 12);
+
   return {
-    analysisVersion: '1.0',
-    scoringVersion: 'fd-shortform-v1',
+    analysisVersion: '1.1',
+    scoringVersion: 'fd-shortform-v2',
+    scoring: {
+      objective: normalizedObjective,
+      weights,
+    },
     summary: String(value.summary || '').trim(),
     creativeAngle: String(value.creativeAngle || '').trim(),
-    scores: { overall, ...scores },
+    scores,
+    qualityGate: qualityGate(scores, retentionRisks, fixes),
     hook: value.hook && typeof value.hook === 'object' ? value.hook : {},
-    timeline: asArray(value.timeline).slice(0, 30),
-    retentionRisks: asArray(value.retentionRisks).slice(0, 12),
+    timeline,
+    retentionRisks,
     continuity: value.continuity && typeof value.continuity === 'object' ? value.continuity : {},
     cta: value.cta && typeof value.cta === 'object' ? value.cta : {},
     platformAssessment: value.platformAssessment && typeof value.platformAssessment === 'object'
       ? value.platformAssessment
       : {},
-    fixes: asArray(value.fixes).slice(0, 12),
+    fixes,
     regenerationPrompts: asArray(value.regenerationPrompts).slice(0, 12),
     repurpose: value.repurpose && typeof value.repurpose === 'object' ? value.repurpose : {},
     limitations: asArray(value.limitations).slice(0, 10),

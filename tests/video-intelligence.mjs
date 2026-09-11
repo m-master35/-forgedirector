@@ -40,8 +40,8 @@ const normalized = normalizeVideoAnalysis({
   regenerationPrompts: [],
 });
 
-assert.equal(normalized.analysisVersion, '1.2');
-assert.equal(normalized.scoringVersion, 'fd-shortform-v3');
+assert.equal(normalized.analysisVersion, '1.3');
+assert.equal(normalized.scoringVersion, 'fd-shortform-v4');
 assert.equal(normalized.scoring.objective, 'engagement');
 assert.equal(normalized.scores.overall, 79);
 assert.equal(normalized.qualityGate.action, 'revise');
@@ -123,5 +123,57 @@ assert.equal(compliantCandidate.compliance.status, 'fail');
 assert.equal(compliantCandidate.compliance.checks.length, 3);
 assert.equal(compliantCandidate.compliance.uncertainCount, 1);
 assert.equal(compliantCandidate.qualityGate.action, 'revise');
+
+const sanitized = normalizeVideoAnalysis({
+  scores: {
+    hook: 70,
+    pacing: 70,
+    clarity: 70,
+    visualQuality: 70,
+    continuity: 70,
+    cta: 70,
+    platformFit: 70,
+    conversionReadiness: 70,
+  },
+  hook: {
+    verdict: 'strong',
+    spokenHook: 'Model guessed speech',
+    issues: ['Use trending audio', 'Opening text is visually unclear'],
+  },
+  timeline: [{
+    startSeconds: 0,
+    endSeconds: 3,
+    purpose: 'hook',
+    speech: 'Guessed speech',
+    recommendations: ['Add hashtags', 'Move the visual reveal earlier'],
+  }],
+  platformAssessment: {
+    fit: 'mixed',
+    reasons: ['Could help the algorithm', 'Aspect ratio fits the target platform'],
+  },
+  fixes: [
+    { issue: 'Low discoverability', action: 'Add hashtags' },
+    { issue: 'Slow reveal', action: 'Move the first meaningful visual earlier' },
+  ],
+  regenerationPrompts: [
+    { reason: 'Needs virality', prompt: 'Use a trending challenge' },
+    { reason: 'Slow visual opening', prompt: 'Start with immediate visible action' },
+  ],
+  repurpose: {
+    tiktok: ['Use trending audio', 'Tighten the first cut'],
+    instagramReels: ['Add hashtags', 'Preserve the 9:16 crop'],
+    youtubeShorts: ['Boost discoverability', 'Keep the CTA legible'],
+  },
+}, { objective: 'engagement', hasTranscript: false });
+
+assert.equal(sanitized.hook.spokenHook, null);
+assert.equal(sanitized.timeline[0].speech, null);
+assert.deepEqual(sanitized.timeline[0].recommendations, ['Move the visual reveal earlier']);
+assert.equal(sanitized.fixes.length, 1);
+assert.equal(sanitized.regenerationPrompts.length, 1);
+assert.deepEqual(sanitized.repurpose.tiktok, ['Tighten the first cut']);
+assert.deepEqual(sanitized.repurpose.instagramReels, ['Preserve the 9:16 crop']);
+assert.deepEqual(sanitized.repurpose.youtubeShorts, ['Keep the CTA legible']);
+assert.ok(sanitized.limitations.some((item) => item.includes('Audio was not analyzed')));
 
 console.log('Video intelligence tests passed');

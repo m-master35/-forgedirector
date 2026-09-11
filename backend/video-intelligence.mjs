@@ -376,24 +376,57 @@ function expectedRequirementChecks(requirements) {
   return checks;
 }
 
-function normalizeCompliance(value, requirements) {
-  const expected = expectedRequirementChecks(requirements);
+function normalizeMatchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  if (expected.length === 0) {
-    return {
-      status: 'not_requested',
-      passed: null,
-      failedCount: 0,
-      uncertainCount: 0,
-      checks: [],
-    };
+function collectOnScreenText(value) {
+  const items = [];
+  const add = (text) => {
+    const cleaned = String(text || '').trim();
+    if (cleaned) items.push(cleaned);
+  };
+  add(value?.hook?.onScreenHook);
+  for (const item of asArray(value?.timeline)) add(item?.onScreenText);
+  return items;
+}
+
+function collectVisualEvidence(value) {
+  const items = [];
+  const add = (text) => {
+    const cleaned = String(text || '').trim();
+    if (cleaned) items.push(cleaned);
+  };
+  add(value?.summary);
+  add(value?.creativeAngle);
+  add(value?.hook?.firstThreeSeconds);
+  add(value?.hook?.onScreenHook);
+  for (const item of asArray(value?.timeline)) {
+    add(item?.visual);
+    add(item?.onScreenText);
+    for (const issue of asArray(item?.issues)) add(issue);
   }
+  for (const issue of asArray(value?.continuity?.issues)) add(issue);
+  return items;
+}
 
+function corpusIncludes(items, rule) {
+  const needle = normalizeMatchText(rule);
+  if (!needle) return false;
+  const haystack = normalizeMatchText(items.join(' | '));
+  return haystack.includes(needle);
+}
+
+function sourceComplianceChecks(value) {
   const sourceChecks = value?.compliance && typeof value.compliance === 'object'
     ? asArray(value.compliance.checks)
     : [];
-
-  const normalizedSource = sourceChecks.slice(0, 80).map((check) => {
+  return sourceChecks.slice(0, 80).map((check) => {
     const status = ['pass', 'fail', 'uncertain'].includes(String(check?.status || '').toLowerCase())
       ? String(check.status).toLowerCase()
       : 'uncertain';
@@ -407,38 +440,140 @@ function normalizeCompliance(value, requirements) {
         : null,
     };
   });
+}
 
-  const used = new Set();
-  const checks = expected.map((item) => {
-    const target = item.rule.toLowerCase();
-    let index = normalizedSource.findIndex((check, candidateIndex) => {
+function findSourceCheck(sourceChecks, item, used) {
+  const target = normalizeMatchText(item.rule);
+  let index = sourceChecks.findIndex((check, candidateIndex) => {
+    if (used.has(candidateIndex)) return false;
+    return check.type.toLowerCase() === item.type.toLowerCase()
+      && normalizeMatchText(check.rule) === target;
+  });
+  if (index < 0) {
+    index = sourceChecks.findIndex((check, candidateIndex) => {
       if (used.has(candidateIndex)) return false;
-      const sameType = check.type.toLowerCase() === item.type.toLowerCase();
-      const sameRule = check.rule.toLowerCase() === target;
-      return sameType && sameRule;
+      return normalizeMatchText(check.rule) === target;
     });
+  }
+  if (index >= 0) used.add(index);
+  return index >= 0 ? sourceChecks[index] : null;
+}
 
-    if (index < 0) {
-      index = normalizedSource.findIndex((check, candidateIndex) => {
-        if (used.has(candidateIndex)) return false;
-        return check.rule.toLowerCase() === target;
-      });
-    }
+function normalizeCompliance(value, requirements) {
+  const expected = expectedRequirementChecks(requirements);
 
-    if (index < 0) {
-      return {
-        ...item,
-        status: 'uncertain',
-        evidence: 'The analysis did not return evidence for this required check.',
-        timestampSeconds: null,
-      };
-    }
-
-    used.add(index);
+  if (expected.length === 0) {
     return {
-      ...normalizedSource[index],
-      type: item.type,
-      rule: item.rule,
+      status: 'not_requested',
+      passed: null,
+      failedCount: 0,
+      uncertainCount: 0,
+      checks: [],
+    };
+  }
+
+  const onScreenText = collectOnScreenText(value);
+  const visualEvidence = collectVisualEvidence(value);
+  const sourceChecks = sourceComplianceChecks(value);
+  const used = new Set();
+
+  const checks = expected.map((item) => {
+    const source = findSourceCheck(sourceChecks, item, used);
+
+    if (item.type === 'ctaRequired') {
+      if (value?.cta?.present === true) {
+        return {
+          ...item,
+          status: 'pass',
+          evidence: 'CTA was observed by the video analysis.',
+          timestampSeconds: source?.timestampSeconds ?? null,
+        };
+      }
+      if (value?.cta?.present === false) {
+        return {
+          ...item,
+          status: 'fail',
+          evidence: String(value?.cta?.issue || 'No CTA was observed.'),
+          timestampSeconds: source?.timestampSeconds ?? null,
+        };
+      }
+    }
+
+    if (item.type === 'mustIncludeText') {
+      if (corpusIncludes(onScreenText, item.rule)) {
+        return {
+          ...item,
+          status: 'pass',
+          evidence: `Required on-screen text observed: "${item.rule}".`,
+          timestampSeconds: source?.timestampSeconds ?? null,
+        };
+      }
+      if (source && source.status !== 'uncertain') return { ...source, type: item.type, rule: item.rule };
+      if (onScreenText.length > 0) {
+        return {
+          ...item,
+          status: 'fail',
+          evidence: `Required on-screen text was not observed. Extracted text: ${onScreenText.join(' | ')}`,
+          timestampSeconds: null,
+        };
+      }
+    }
+
+    if (item.type === 'mustNotShow') {
+      if (corpusIncludes(visualEvidence, item.rule)) {
+        return {
+          ...item,
+          status: 'fail',
+          evidence: `Forbidden element was observed in the video evidence: "${item.rule}".`,
+          timestampSeconds: source?.timestampSeconds ?? null,
+        };
+      }
+      if (source && source.status === 'fail') return { ...source, type: item.type, rule: item.rule };
+      if (visualEvidence.length > 0) {
+        return {
+          ...item,
+          status: 'pass',
+          evidence: `Forbidden element was not observed in the analyzed video: "${item.rule}".`,
+          timestampSeconds: null,
+        };
+      }
+    }
+
+    if (item.type === 'mustShow') {
+      if (corpusIncludes(visualEvidence, item.rule)) {
+        return {
+          ...item,
+          status: 'pass',
+          evidence: `Required element was observed in the video evidence: "${item.rule}".`,
+          timestampSeconds: source?.timestampSeconds ?? null,
+        };
+      }
+      if (source && source.status !== 'uncertain') return { ...source, type: item.type, rule: item.rule };
+    }
+
+    if (item.type === 'continuityRule') {
+      if (source && source.status !== 'uncertain') return { ...source, type: item.type, rule: item.rule };
+      const issueCorpus = [
+        ...asArray(value?.continuity?.issues),
+        ...asArray(value?.timeline).flatMap((entry) => asArray(entry?.issues)),
+      ];
+      if (issueCorpus.some((issue) => /continuity|change|changed|different|violat/i.test(String(issue)))) {
+        return {
+          ...item,
+          status: 'fail',
+          evidence: issueCorpus.join(' | ').slice(0, 800),
+          timestampSeconds: null,
+        };
+      }
+    }
+
+    if (source) return { ...source, type: item.type, rule: item.rule };
+
+    return {
+      ...item,
+      status: 'uncertain',
+      evidence: 'The analysis did not return enough evidence for this required check.',
+      timestampSeconds: null,
     };
   });
 
@@ -559,8 +694,8 @@ export function normalizeVideoAnalysis(value, {
   }
 
   return {
-    analysisVersion: '1.3',
-    scoringVersion: 'fd-shortform-v4',
+    analysisVersion: '1.4',
+    scoringVersion: 'fd-shortform-v5',
     scoring: {
       objective: normalizedObjective,
       weights,

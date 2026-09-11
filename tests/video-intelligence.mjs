@@ -40,12 +40,23 @@ const normalized = normalizeVideoAnalysis({
   regenerationPrompts: [],
 });
 
-assert.equal(normalized.analysisVersion, '1.1');
-assert.equal(normalized.scoringVersion, 'fd-shortform-v2');
+assert.equal(normalized.analysisVersion, '1.2');
+assert.equal(normalized.scoringVersion, 'fd-shortform-v3');
 assert.equal(normalized.scoring.objective, 'engagement');
 assert.equal(normalized.scores.overall, 79);
 assert.equal(normalized.qualityGate.action, 'revise');
 assert.equal(normalized.timeline.length, 1);
+
+const reconciled = normalizeVideoAnalysis({
+  scores: { hook: 10, pacing: 50, clarity: 50, visualQuality: 50, continuity: 10, cta: 10, platformFit: 10, conversionReadiness: 50 },
+  hook: { verdict: 'weak' },
+  continuity: { verdict: 'strong' },
+  cta: { clarity: 'mixed' },
+  platformAssessment: { fit: 'strong' },
+});
+assert.equal(reconciled.scores.continuity, 70);
+assert.equal(reconciled.scores.platformFit, 70);
+assert.equal(reconciled.scores.cta, 35);
 
 const weak = normalizeVideoAnalysis({
   scores: {

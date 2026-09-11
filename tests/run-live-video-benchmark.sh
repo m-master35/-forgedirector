@@ -30,8 +30,14 @@ make_text_video "$VID/weak-static.mp4" "0x777777" "A VIDEO" "HELLO"
 
 ffmpeg -hide_banner -loglevel error -y   -f lavfi -i "color=c=0x101828:s=720x1280:d=3:r=24"   -f lavfi -i "color=c=0x281010:s=720x1280:d=3:r=24"   -filter_complex "[0:v]drawtext=fontfile='$FONT':text='LEAD CHARACTER':fontcolor=white:fontsize=56:x=(w-text_w)/2:y=250,drawbox=x=210:y=470:w=300:h=420:color=blue@1:t=fill,drawtext=fontfile='$FONT':text='BLUE SHIRT':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=950[v0];[1:v]drawtext=fontfile='$FONT':text='LEAD CHARACTER':fontcolor=white:fontsize=56:x=(w-text_w)/2:y=250,drawbox=x=210:y=470:w=300:h=420:color=red@1:t=fill,drawtext=fontfile='$FONT':text='RED SHIRT':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=950[v1];[v0][v1]concat=n=2:v=1:a=0[v]"   -map "[v]" -c:v libx264 -preset veryfast -pix_fmt yuv420p "$VID/continuity-break.mp4"
 
-curl -L --fail --silent --show-error   "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/short-video/sample-output/assets/short-video.mp4"   -o "$VID/real-motorcycle.mp4"
-curl -L --fail --silent --show-error   "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/wine-label/sample-output/assets/05-hero.mp4"   -o "$VID/real-wine.mp4"
+curl -L --fail --silent --show-error "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/short-video/sample-output/assets/short-video.mp4" -o "$VID/real-motorcycle-original.mp4"
+curl -L --fail --silent --show-error "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/wine-label/sample-output/assets/05-hero.mp4" -o "$VID/real-wine.mp4"
+
+ffprobe -v error -show_entries stream=codec_name,codec_type,width,height,pix_fmt,profile -show_entries format=format_name,duration,size,bit_rate -of json "$VID/real-motorcycle-original.mp4" > "$OUT/real-motorcycle-ffprobe.json"
+
+ffmpeg -hide_banner -loglevel error -y -i "$VID/real-motorcycle-original.mp4" -an -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -movflags +faststart "$VID/real-motorcycle.mp4"
+
+ffprobe -v error -show_entries stream=codec_name,codec_type,width,height,pix_fmt,profile -show_entries format=format_name,duration,size,bit_rate -of json "$VID/real-motorcycle.mp4" > "$OUT/real-motorcycle-normalized-ffprobe.json"
 
 cat > "$OUT/expectations.json" <<'JSON'
 {

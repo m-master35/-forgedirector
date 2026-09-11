@@ -77,4 +77,51 @@ assert.equal(weak.scoring.objective, 'conversion');
 assert.equal(weak.qualityGate.action, 'regenerate');
 assert.ok(weak.qualityGate.blockers.length >= 2);
 
+const compliantCandidate = normalizeVideoAnalysis({
+  scores: {
+    hook: 90,
+    pacing: 90,
+    clarity: 90,
+    visualQuality: 90,
+    continuity: 90,
+    cta: 90,
+    platformFit: 90,
+    conversionReadiness: 90,
+  },
+  hook: { verdict: 'strong' },
+  continuity: { verdict: 'strong' },
+  cta: { clarity: 'strong' },
+  platformAssessment: { fit: 'strong' },
+  compliance: {
+    checks: [
+      {
+        type: 'mustShow',
+        rule: 'Brand logo',
+        status: 'pass',
+        evidence: 'Logo visible on end frame.',
+        timestampSeconds: 2,
+      },
+      {
+        type: 'mustNotShow',
+        rule: 'Competitor logo',
+        status: 'fail',
+        evidence: 'Competitor mark visible.',
+        timestampSeconds: 1,
+      },
+    ],
+  },
+}, {
+  objective: 'conversion',
+  requirements: {
+    mustShow: ['Brand logo'],
+    mustNotShow: ['Competitor logo'],
+    ctaRequired: true,
+  },
+});
+
+assert.equal(compliantCandidate.compliance.status, 'fail');
+assert.equal(compliantCandidate.compliance.checks.length, 3);
+assert.equal(compliantCandidate.compliance.uncertainCount, 1);
+assert.equal(compliantCandidate.qualityGate.action, 'revise');
+
 console.log('Video intelligence tests passed');

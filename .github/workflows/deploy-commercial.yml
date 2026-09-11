@@ -151,6 +151,10 @@ jobs:
             HEADERS+=(-H "x-rapidapi-proxy-secret: $RAPIDAPI_PROXY_SECRET")
           fi
 
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
           ffmpeg -f lavfi -i "testsrc=size=320x568:rate=8" -t 3 -pix_fmt yuv420p -an -y /tmp/test.mp4 >/dev/null 2>&1
           SIZE=$(stat -c%s /tmp/test.mp4)
 

@@ -1,7 +1,7 @@
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 import { SYSTEM_PROMPT, buildUserPrompt } from './director-prompt.mjs';
 import { evaluateCampaign } from './qa.mjs';
-import { createVideoUpload, resolveVideoAsset } from './storage.mjs';
+import { createVideoUpload, deleteVideoAsset, resolveVideoAsset } from './storage.mjs';
 import {
   VIDEO_ANALYSIS_SYSTEM_PROMPT,
   buildVideoAnalysisPrompt,
@@ -330,25 +330,29 @@ export const handler = async (event) => {
     if (method === 'POST' && path === '/v1/analyze') {
       const assetId = assertText(payload?.assetId, 'assetId', 100);
       const asset = await resolveVideoAsset(assetId);
-      const result = await invokeVideoAnalysis({ asset, payload });
-
-      return response(200, {
-        analysis: result.analysis,
-        meta: {
-          operation: 'analyze',
-          modelId: MODEL_ID,
-          platform: result.platform,
-          objective: result.objective,
-          asset: {
-            id: asset.assetId,
-            sizeBytes: asset.sizeBytes,
-            contentType: asset.contentType,
+      try {
+        const result = await invokeVideoAnalysis({ asset, payload });
+        return response(200, {
+          analysis: result.analysis,
+          meta: {
+            operation: 'analyze',
+            modelId: MODEL_ID,
+            platform: result.platform,
+            objective: result.objective,
+            asset: {
+              id: asset.assetId,
+              sizeBytes: asset.sizeBytes,
+              contentType: asset.contentType,
+              deletedAfterAnalysis: true,
+            },
+            usage: result.usage,
+            scoringNotice: 'Scores are heuristic creative-quality assessments, not predictions of views, sales, retention, ROAS, or virality.',
+            requestId,
           },
-          usage: result.usage,
-          scoringNotice: 'Scores are heuristic creative-quality assessments, not predictions of views, sales, retention, ROAS, or virality.',
-          requestId,
-        },
-      });
+        });
+      } finally {
+        await deleteVideoAsset(assetId);
+      }
     }
 
     if (method === 'POST' && path === '/v1/qa') {

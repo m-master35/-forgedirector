@@ -17,7 +17,7 @@ ULTRA is the recommended launch plan.
 
 ## Cost protection
 
-ForgeDirector currently limits videos to 30 MiB and declares a 120-second short-form duration ceiling. Temporary uploads expire automatically after one day.
+ForgeDirector currently limits videos to 30 MiB and declares a 120-second short-form duration ceiling. Successfully analyzed videos are deleted immediately. Abandoned uploads remain private and are removed by the existing storage lifecycle.
 
 Amazon Nova 2 Lite samples short videos at roughly one frame per second. AWS documentation estimates about 2,880 input tokens for a 10-second video and 8,640 input tokens for a 30-second video. At the published Nova 2 Lite text/video token rates used for launch modeling, video-input cost is small relative to the returned analysis text.
 

@@ -55,6 +55,8 @@ Commercial endpoints:
 
 It also applies objective-specific scoring weights and returns a deterministic `accept`, `revise`, or `regenerate` quality gate so downstream agents can make a production decision without inventing their own threshold logic.
 
+Developers can also supply explicit production requirements—elements that must appear, elements that must not appear, required on-screen text, continuity rules, and CTA requirements. ForgeDirector returns evidence-backed pass/fail/uncertain checks and prevents an otherwise strong asset from being automatically accepted when a required rule fails.
+
 Video scores are heuristic creative-quality assessments. They are not predictions or guarantees of views, retention, sales, ROAS, or virality.
 
 Uploaded media is stored privately; successfully analyzed assets are deleted immediately, while abandoned uploads are removed by the existing storage lifecycle. Exact spoken-word analysis can be improved by supplying a transcript because Nova video understanding analyzes visual frames rather than the video's audio track.

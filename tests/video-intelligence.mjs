@@ -40,8 +40,8 @@ const normalized = normalizeVideoAnalysis({
   regenerationPrompts: [],
 });
 
-assert.equal(normalized.analysisVersion, '1.3');
-assert.equal(normalized.scoringVersion, 'fd-shortform-v4');
+assert.equal(normalized.analysisVersion, '1.4');
+assert.equal(normalized.scoringVersion, 'fd-shortform-v5');
 assert.equal(normalized.scoring.objective, 'engagement');
 assert.equal(normalized.scores.overall, 79);
 assert.equal(normalized.qualityGate.action, 'revise');
@@ -123,6 +123,92 @@ assert.equal(compliantCandidate.compliance.status, 'fail');
 assert.equal(compliantCandidate.compliance.checks.length, 3);
 assert.equal(compliantCandidate.compliance.uncertainCount, 1);
 assert.equal(compliantCandidate.qualityGate.action, 'revise');
+
+const evidenceDerived = normalizeVideoAnalysis({
+  scores: {
+    hook: 80, pacing: 80, clarity: 80, visualQuality: 80,
+    continuity: 80, cta: 80, platformFit: 80, conversionReadiness: 80,
+  },
+  hook: { verdict: 'strong' },
+  timeline: [{
+    startSeconds: 0,
+    endSeconds: 6,
+    purpose: 'cta',
+    visual: 'Dark title card with FORGE FLOW and START FREE. No RIVAL branding is present.',
+    onScreenText: 'FORGE FLOW\nSTART FREE',
+    issues: [],
+  }],
+  cta: { present: true, type: 'visual', clarity: 'strong', issue: null },
+  continuity: { verdict: 'strong', issues: [] },
+  platformAssessment: { fit: 'strong', reasons: [] },
+  compliance: {
+    checks: [{
+      type: 'mustNotShow',
+      rule: 'RIVAL',
+      status: 'uncertain',
+      evidence: '',
+      timestampSeconds: null,
+    }],
+  },
+}, {
+  objective: 'conversion',
+  requirements: {
+    mustIncludeText: ['START FREE'],
+    mustNotShow: ['RIVAL'],
+    ctaRequired: true,
+  },
+});
+
+assert.equal(evidenceDerived.compliance.status, 'pass');
+assert.equal(evidenceDerived.compliance.checks.find((x) => x.type === 'mustIncludeText').status, 'pass');
+assert.equal(evidenceDerived.compliance.checks.find((x) => x.type === 'mustNotShow').status, 'pass');
+assert.equal(evidenceDerived.compliance.checks.find((x) => x.type === 'ctaRequired').status, 'pass');
+
+const forbiddenDerived = normalizeVideoAnalysis({
+  scores: {
+    hook: 70, pacing: 70, clarity: 70, visualQuality: 70,
+    continuity: 70, cta: 50, platformFit: 70, conversionReadiness: 50,
+  },
+  summary: 'Title card showing FORGE FLOW and RIVAL.',
+  timeline: [{
+    startSeconds: 0,
+    endSeconds: 6,
+    purpose: 'other',
+    visual: 'Centered text FORGE FLOW and RIVAL.',
+    onScreenText: 'FORGE FLOW\nRIVAL',
+    issues: [],
+  }],
+  compliance: {
+    checks: [{
+      type: 'mustNotShow',
+      rule: 'RIVAL',
+      status: 'pass',
+      evidence: 'RIVAL is displayed but this was incorrectly marked pass.',
+      timestampSeconds: 0,
+    }],
+  },
+}, {
+  requirements: {
+    mustNotShow: ['RIVAL'],
+  },
+});
+
+assert.equal(forbiddenDerived.compliance.checks[0].status, 'fail');
+
+const missingCtaDerived = normalizeVideoAnalysis({
+  scores: {
+    hook: 60, pacing: 60, clarity: 60, visualQuality: 60,
+    continuity: 60, cta: 20, platformFit: 60, conversionReadiness: 40,
+  },
+  cta: { present: false, type: 'none', clarity: 'weak', issue: 'No CTA was observed.' },
+  timeline: [{ startSeconds: 0, endSeconds: 6, onScreenText: 'FORGE FLOW' }],
+}, {
+  requirements: {
+    ctaRequired: true,
+  },
+});
+
+assert.equal(missingCtaDerived.compliance.checks[0].status, 'fail');
 
 const sanitized = normalizeVideoAnalysis({
   scores: {

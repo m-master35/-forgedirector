@@ -233,7 +233,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
       ],
     }],
     inferenceConfig: {
-      maxTokens: 5200,
+      maxTokens: 5000,
       temperature: 0.2,
       topP: 0.9,
     },

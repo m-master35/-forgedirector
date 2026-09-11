@@ -97,9 +97,13 @@ Analyze the supplied video as a production and creative artifact. Your output is
 Important rules:
 - Judge observable creative execution, not hypothetical audience outcomes.
 - Scores are heuristic creative-quality scores, not promises or predictions of views, retention, ROAS, sales, or virality.
-- Do not invent speech, on-screen text, brand names, products, claims, or events that are not visible or supplied in the transcript/context.
+- Do not invent speech, on-screen text, brand names, products, claims, events, trends, or subject matter that are not visible or supplied in the transcript/context.
+- Never assume the asset is an advertisement or product video unless the video or supplied context establishes that.
+- Do not make claims about platform algorithms, predicted retention, predicted engagement, virality, sales, or ROAS.
+- If context is absent, keep fixes structurally specific but subject-matter neutral.
 - If spoken content cannot be reliably determined from the video input and no transcript is supplied, set speech-dependent fields to null or explain the limitation.
 - Give precise timestamps when reasonably observable; otherwise use your best approximate timestamp and mark it approximate.
+- Numeric scores must agree with qualitative verdicts: strong should normally be 70-100, mixed 35-69, and weak 0-45.
 - Prioritize actionable corrections that an editor, video-generation model, or automation system can execute.
 - For regeneration prompts, describe only the replacement segment and preserve identity, product, wardrobe, setting, lighting, and camera continuity unless a change is explicitly recommended.
 - Keep arrays concise and ranked by impact.
@@ -242,6 +246,14 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function reconcileVerdictScore(score, verdict) {
+  const normalized = String(verdict || '').trim().toLowerCase();
+  if (normalized === 'strong') return Math.max(score, 70);
+  if (normalized === 'mixed') return Math.max(35, Math.min(score, 69));
+  if (normalized === 'weak') return Math.min(score, 45);
+  return score;
+}
+
 function normalizeTimeline(items) {
   return asArray(items).slice(0, 30).map((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return {};
@@ -327,6 +339,11 @@ export function normalizeVideoAnalysis(value, { objective = 'engagement' } = {})
   const dimensionScores = {};
   for (const key of SCORE_KEYS) dimensionScores[key] = boundedScore(sourceScores[key]);
 
+  dimensionScores.hook = reconcileVerdictScore(dimensionScores.hook, value?.hook?.verdict);
+  dimensionScores.continuity = reconcileVerdictScore(dimensionScores.continuity, value?.continuity?.verdict);
+  dimensionScores.cta = reconcileVerdictScore(dimensionScores.cta, value?.cta?.clarity);
+  dimensionScores.platformFit = reconcileVerdictScore(dimensionScores.platformFit, value?.platformAssessment?.fit);
+
   const overall = Math.round(
     SCORE_KEYS.reduce((sum, key) => sum + dimensionScores[key] * weights[key], 0),
   );
@@ -337,8 +354,8 @@ export function normalizeVideoAnalysis(value, { objective = 'engagement' } = {})
   const fixes = asArray(value.fixes).slice(0, 12);
 
   return {
-    analysisVersion: '1.1',
-    scoringVersion: 'fd-shortform-v2',
+    analysisVersion: '1.2',
+    scoringVersion: 'fd-shortform-v3',
     scoring: {
       objective: normalizedObjective,
       weights,

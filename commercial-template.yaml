@@ -20,6 +20,9 @@ Parameters:
     Type: Number
     Default: 31457280
     Description: Maximum uploaded video size accepted for analysis (30 MiB)
+  VideoAssetBucketName:
+    Type: String
+    Description: Existing private S3 bucket used for temporary ForgeDirector video assets
 
 Globals:
   Function:
@@ -31,35 +34,6 @@ Globals:
     Tracing: Active
 
 Resources:
-  VideoAssetBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        IgnorePublicAcls: true
-        BlockPublicPolicy: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteTemporaryVideoAssets
-            Status: Enabled
-            ExpirationInDays: 1
-      CorsConfiguration:
-        CorsRules:
-          - AllowedOrigins:
-              - '*'
-            AllowedMethods:
-              - PUT
-            AllowedHeaders:
-              - '*'
-            ExposedHeaders:
-              - ETag
-            MaxAge: 900
-
   CreativeIntelligenceFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -73,7 +47,8 @@ Resources:
           MAX_BODY_BYTES: '120000'
           MAX_VIDEO_BYTES: !Ref MaxVideoBytes
           UPLOAD_URL_TTL_SECONDS: '900'
-          VIDEO_BUCKET: !Ref VideoAssetBucket
+          VIDEO_BUCKET: !Ref VideoAssetBucketName
+          VIDEO_PREFIX: video-assets
       Policies:
         - Statement:
             - Effect: Allow
@@ -86,7 +61,7 @@ Resources:
                 - s3:GetObject
                 - s3:PutObject
                 - s3:DeleteObject
-              Resource: !Sub '${VideoAssetBucket.Arn}/*'
+              Resource: !Sub 'arn:${AWS::Partition}:s3:::${VideoAssetBucketName}/video-assets/*'
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -117,5 +92,5 @@ Outputs:
     Description: Base URL to configure in RapidAPI Studio
     Value: !GetAtt CreativeIntelligenceFunctionUrl.FunctionUrl
   VideoAssetBucketName:
-    Description: Private temporary bucket for ForgeDirector video-analysis uploads
-    Value: !Ref VideoAssetBucket
+    Description: Existing private bucket used for temporary ForgeDirector video-analysis uploads
+    Value: !Ref VideoAssetBucketName

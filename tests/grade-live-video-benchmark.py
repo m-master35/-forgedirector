@@ -84,6 +84,10 @@ for case in expectations["cases"]:
         "hook": analysis.get("scores", {}).get("hook"),
         "platformFit": analysis.get("scores", {}).get("platformFit"),
         "usageTokens": result.get("meta", {}).get("usage", {}).get("totalTokens"),
+        "summary": analysis.get("summary", ""),
+        "limitations": analysis.get("limitations", []),
+        "cta": analysis.get("cta", {}),
+        "timeline": analysis.get("timeline", []),
         "details": details,
     })
 
@@ -140,6 +144,21 @@ for r in rows:
         continue
     speech = "-" if r.get("speechClean") is None else ("yes" if r["speechClean"] else "NO")
     md.append(f"| {r['name']} | {r['checks']} | {r.get('gate')} | {r.get('overall')} | {r.get('hook')} | {r.get('platformFit')} | {speech} |")
+
+md.append("")
+md.append("## Case observations")
+for r in rows:
+    if r.get("status") != "OK":
+        continue
+    summary_text = str(r.get("summary") or "").replace("\n", " ")[:500]
+    limitations_text = "; ".join(str(x) for x in r.get("limitations", []))[:500]
+    cta_text = json.dumps(r.get("cta", {}), ensure_ascii=False)[:500]
+    timeline_text = json.dumps(r.get("timeline", []), ensure_ascii=False)[:1200]
+    md.append(f"### {r['name']}")
+    md.append(f"- Summary: {summary_text or '(empty)'}")
+    md.append(f"- CTA: {cta_text}")
+    md.append(f"- Limitations: {limitations_text or '(none)'}")
+    md.append(f"- Timeline: {timeline_text}")
 
 if relational:
     md.append("")

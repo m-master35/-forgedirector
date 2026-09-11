@@ -1,1 +1,47 @@
-import assert from 'node:assert/strict';\nimport { assertAssetId, buildVideoAnalysisPrompt, normalizeVideoAnalysis, videoFormatFromContentType } from '../backend/video-intelligence.mjs';\n\nassert.equal(videoFormatFromContentType('video/mp4'), 'mp4');\nassert.equal(videoFormatFromContentType('video/quicktime'), 'mov');\nassert.equal(videoFormatFromContentType('application/octet-stream'), null);\n\nconst id = '8f0f6a79-14c8-4cc9-9bde-272d25dd7070';\nassert.equal(assertAssetId(id), id);\n\nconst prompt = buildVideoAnalysisPrompt({ platform: 'TikTok', objective: 'conversion', audience: 'Young professionals', transcript: 'Sample transcript.', declaredDurationSeconds: 15 });\nassert.match(prompt, /TARGET PLATFORM: TikTok/);\nassert.match(prompt, /OBJECTIVE: conversion/);\n\nconst normalized = normalizeVideoAnalysis({\n  summary: 'A concise product ad.',\n  scores: { hook: 80, pacing: 70, clarity: 90, visualQuality: 75, continuity: 100, cta: 60, platformFit: 85, conversionReadiness: 65 },\n  timeline: [{ startSeconds: 0, endSeconds: 3 }],\n  fixes: [{ priority: 1, action: 'Move the product reveal earlier.' }],\n  regenerationPrompts: []\n});\nassert.equal(normalized.analysisVersion, '1.0');\nassert.equal(normalized.scores.overall, 79);\nassert.equal(normalized.timeline.length, 1);\n\nconsole.log('Video intelligence tests passed');\n
+import assert from 'node:assert/strict';
+import {
+  assertAssetId,
+  buildVideoAnalysisPrompt,
+  normalizeVideoAnalysis,
+  videoFormatFromContentType,
+} from '../backend/video-intelligence.mjs';
+
+assert.equal(videoFormatFromContentType('video/mp4'), 'mp4');
+assert.equal(videoFormatFromContentType('video/quicktime'), 'mov');
+assert.equal(videoFormatFromContentType('application/octet-stream'), null);
+
+const id = '8f0f6a79-14c8-4cc9-9bde-272d25dd7070';
+assert.equal(assertAssetId(id), id);
+
+const prompt = buildVideoAnalysisPrompt({
+  platform: 'TikTok',
+  objective: 'conversion',
+  audience: 'Young professionals',
+  transcript: 'Sample transcript.',
+  declaredDurationSeconds: 15,
+});
+assert.match(prompt, /TARGET PLATFORM: TikTok/);
+assert.match(prompt, /OBJECTIVE: conversion/);
+
+const normalized = normalizeVideoAnalysis({
+  summary: 'A concise product ad.',
+  scores: {
+    hook: 80,
+    pacing: 70,
+    clarity: 90,
+    visualQuality: 75,
+    continuity: 100,
+    cta: 60,
+    platformFit: 85,
+    conversionReadiness: 65,
+  },
+  timeline: [{ startSeconds: 0, endSeconds: 3 }],
+  fixes: [{ priority: 1, action: 'Move the product reveal earlier.' }],
+  regenerationPrompts: [],
+});
+
+assert.equal(normalized.analysisVersion, '1.0');
+assert.equal(normalized.scores.overall, 79);
+assert.equal(normalized.timeline.length, 1);
+
+console.log('Video intelligence tests passed');

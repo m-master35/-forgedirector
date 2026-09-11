@@ -316,12 +316,16 @@ async function invokeVideoAnalysis({ asset, payload }) {
     },
   }));
 
-  let usedModelId = MODEL_ID;
+  const continuitySensitive = Array.isArray(requirements?.continuityRules)
+    && requirements.continuityRules.length > 0;
+  let usedModelId = continuitySensitive && VIDEO_FALLBACK_MODEL_ID
+    ? VIDEO_FALLBACK_MODEL_ID
+    : MODEL_ID;
+  let fallbackUsed = usedModelId !== MODEL_ID;
   let result = await sendAnalysis(usedModelId, prompt);
   let rawText = extractText(result);
   let parsed = parseVideoAnalysisModelJson(rawText);
   let retryUsed = false;
-  let fallbackUsed = false;
 
   if (!hasSubstantiveVideoAnalysis(parsed)) {
     retryUsed = true;

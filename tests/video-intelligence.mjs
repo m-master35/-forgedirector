@@ -40,8 +40,30 @@ const normalized = normalizeVideoAnalysis({
   regenerationPrompts: [],
 });
 
-assert.equal(normalized.analysisVersion, '1.0');
+assert.equal(normalized.analysisVersion, '1.1');
+assert.equal(normalized.scoringVersion, 'fd-shortform-v2');
+assert.equal(normalized.scoring.objective, 'engagement');
 assert.equal(normalized.scores.overall, 79);
+assert.equal(normalized.qualityGate.action, 'revise');
 assert.equal(normalized.timeline.length, 1);
+
+const weak = normalizeVideoAnalysis({
+  scores: {
+    hook: 10,
+    pacing: 20,
+    clarity: 40,
+    visualQuality: 25,
+    continuity: 20,
+    cta: 10,
+    platformFit: 15,
+    conversionReadiness: 10,
+  },
+  retentionRisks: [{ severity: 'high' }, { severity: 'high' }, { severity: 'high' }],
+  fixes: [{ impact: 'high' }],
+}, { objective: 'conversion' });
+
+assert.equal(weak.scoring.objective, 'conversion');
+assert.equal(weak.qualityGate.action, 'regenerate');
+assert.ok(weak.qualityGate.blockers.length >= 2);
 
 console.log('Video intelligence tests passed');

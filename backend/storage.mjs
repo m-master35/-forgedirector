@@ -1,4 +1,9 @@
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { assertAssetId, videoFormatFromContentType } from './video-intelligence.mjs';
 
@@ -7,6 +12,7 @@ const s3 = new S3Client({
 });
 
 const VIDEO_BUCKET = process.env.VIDEO_BUCKET || '';
+const VIDEO_PREFIX = String(process.env.VIDEO_PREFIX || 'video-assets').replace(/^\/+|\/+$/g, '');
 const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_BYTES || 31457280);
 const UPLOAD_URL_TTL_SECONDS = Number(process.env.UPLOAD_URL_TTL_SECONDS || 900);
 
@@ -20,7 +26,7 @@ function requireBucket() {
 }
 
 function assetKey(assetId) {
-  return `uploads/${assertAssetId(assetId)}`;
+  return `${VIDEO_PREFIX}/${assertAssetId(assetId)}`;
 }
 
 export async function createVideoUpload({ assetId, contentType }) {
@@ -33,11 +39,16 @@ export async function createVideoUpload({ assetId, contentType }) {
   }
 
   const key = assetKey(assetId);
+  const normalizedContentType = String(contentType).split(';')[0].trim().toLowerCase();
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: key,
-    ContentType: String(contentType).split(';')[0].trim().toLowerCase(),
+    ContentType: normalizedContentType,
+    Metadata: {
+      purpose: 'forgedirector-video-analysis',
+    },
   });
+
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: UPLOAD_URL_TTL_SECONDS });
 
   return {
@@ -45,7 +56,7 @@ export async function createVideoUpload({ assetId, contentType }) {
     uploadUrl,
     method: 'PUT',
     headers: {
-      'content-type': String(contentType).split(';')[0].trim().toLowerCase(),
+      'content-type': normalizedContentType,
     },
     expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
     maxBytes: MAX_VIDEO_BYTES,
@@ -60,7 +71,7 @@ export async function resolveVideoAsset(assetId) {
   let head;
   try {
     head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-  } catch (error) {
+  } catch {
     const wrapped = new Error('Video asset was not found or is not ready yet.');
     wrapped.statusCode = 404;
     throw wrapped;
@@ -90,4 +101,17 @@ export async function resolveVideoAsset(assetId) {
     contentType,
     format,
   };
+}
+
+export async function deleteVideoAsset(assetId) {
+  const bucket = requireBucket();
+  const key = assetKey(assetId);
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (error) {
+    console.warn('ForgeDirector could not delete temporary video asset', {
+      assetId,
+      message: error?.message,
+    });
+  }
 }

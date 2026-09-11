@@ -290,12 +290,22 @@ components:
 
     VideoAnalysis:
       type: object
-      required: [analysisVersion, scoringVersion, summary, scores, timeline, fixes, regenerationPrompts]
+      required: [analysisVersion, scoringVersion, scoring, summary, scores, qualityGate, timeline, fixes, regenerationPrompts]
       properties:
         analysisVersion:
           type: string
         scoringVersion:
           type: string
+        scoring:
+          type: object
+          required: [objective, weights]
+          properties:
+            objective:
+              type: string
+            weights:
+              type: object
+              additionalProperties:
+                type: number
         summary:
           type: string
         creativeAngle:
@@ -340,6 +350,28 @@ components:
               type: integer
               minimum: 0
               maximum: 100
+        qualityGate:
+          type: object
+          required: [action, confidence, blockers, reasons, thresholds]
+          properties:
+            action:
+              type: string
+              enum: [accept, revise, regenerate]
+            confidence:
+              type: string
+              enum: [high, medium, low]
+            blockers:
+              type: array
+              items:
+                type: string
+            reasons:
+              type: array
+              items:
+                type: string
+            thresholds:
+              type: object
+              additionalProperties:
+                type: number
         hook:
           type: object
           additionalProperties: true

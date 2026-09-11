@@ -178,9 +178,12 @@ jobs:
           ANALYZE_STATUS=$(curl -sS -o /tmp/analyze.json -w '%{http_code}' \
             -X POST \
             "${HEADERS[@]}" \
-            --data "{\"assetId\":\"$ASSET_ID\",\"platform\":\"TikTok\",\"objective\":\"engagement\",\"durationSeconds\":3,\"context\":\"Automated synthetic CI test clip.\"}" \
+            --data "{\"assetId\":\"$ASSET_ID\",\"platform\":\"TikTok\",\"objective\":\"engagement\",\"durationSeconds\":3,\"context\":\"Automated synthetic CI test clip.\",\"requirements\":{\"mustShow\":[\"Brand logo\"],\"ctaRequired\":true}}" \
             "$API_URL/v1/analyze")
           cat /tmp/analyze.json
           test "$ANALYZE_STATUS" = "200"
           jq -e '.analysis.scores.overall >= 0 and .analysis.scores.overall <= 100' /tmp/analyze.json >/dev/null
-          jq -e '.meta.operation == "analyze"' /tmp/analyze.json >/dev/null
+          jq -e '.analysis.qualityGate.action == "accept" or .analysis.qualityGate.action == "revise" or .analysis.qualityGate.action == "regenerate"' /tmp/analyze.json >/dev/null
+          jq -e '.analysis.compliance.status != "not_requested"' /tmp/analyze.json >/dev/null
+          jq -e '.analysis.compliance.checks | length == 2' /tmp/analyze.json >/dev/null
+          jq -e '.meta.operation == "analyze" and .meta.requirementsApplied == true' /tmp/analyze.json >/dev/null

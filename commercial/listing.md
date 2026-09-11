@@ -1,18 +1,18 @@
-# RapidAPI listing copy — ForgeDirector Video Creative Intelligence
+# RapidAPI listing copy — ForgeDirector AI Video QA & Creative Intelligence
 
 ## API name
-ForgeDirector Video Creative Intelligence
+ForgeDirector AI Video QA & Creative Intelligence
 
 ## Short description
-Analyze short-form video for hook strength, pacing, clarity, continuity, CTA quality, platform fit, and retention risks — then return ranked fixes and production-ready regeneration prompts.
+Automated QA for AI-generated short-form video: upload a clip and get an accept/revise/regenerate verdict, creative scores, production-spec compliance, timeline issues, and exact regeneration prompts.
 
 ## Category
 Artificial Intelligence / Machine Learning.
 
 ## Long description
-ForgeDirector is a video creative-intelligence API for developers building AI video tools, ad-generation workflows, creator software, social-media products, and marketing automation.
+ForgeDirector is an automated video-QA layer for developers building AI video generators, ad-generation workflows, creator software, social-media products, and creative automation.
 
-The flagship workflow is **video → structured creative intelligence → exact corrective actions**.
+The flagship workflow is **generated video → automated QA gate → exact corrective action**.
 
 Upload a short-form video, call `/v1/analyze`, and receive standardized JSON containing:
 
@@ -42,7 +42,7 @@ ForgeDirector also keeps its production-orchestration layer:
 
 This creates a full production loop:
 
-**PLAN → CREATE → ANALYZE → FIX → REGENERATE**
+**PLAN → CREATE → QA → ACCEPT / REVISE / REGENERATE**
 
 ### Built for
 - AI video-generation products
@@ -54,8 +54,8 @@ This creates a full production loop:
 - AI agents that need to decide whether to accept or regenerate video
 - internal agency and creative-ops tooling
 
-### Why use ForgeDirector instead of a raw LLM call
-A raw model call gives you a model. ForgeDirector gives you a repeatable video-production analysis contract:
+### Why use ForgeDirector instead of a raw multimodal-model call
+A raw multimodal-model call gives you an opinion. ForgeDirector gives your application a repeatable video-production QA contract:
 
 - secure temporary video ingestion
 - multimodal video understanding
@@ -84,15 +84,15 @@ A raw model call gives you a model. ForgeDirector gives you a repeatable video-p
 **GET /health** — Check API status, limits, and available endpoints.
 
 ## Suggested search keywords
-video analysis api, ai video analysis, ad creative analysis, tiktok analysis, reels analysis, shorts analysis, creative intelligence, video qa, hook analysis, retention analysis, video prompts, ai video, creative api, ad qa
+ai video qa api, generated video qa, video generation qa, ai video analysis, creative compliance api, ad creative qa, video quality gate, accept revise regenerate, tiktok video qa, reels video qa, shorts video qa, hook analysis, continuity qa, regeneration prompts, creative intelligence api
 
 ## Recommended marketplace spotlight
-### Analyze before you publish or regenerate
-Feed ForgeDirector a generated ad, UGC clip, Reel, TikTok, or Short. Receive a machine-readable answer to three questions:
+### Put a quality gate after your video generator
+Feed ForgeDirector an AI-generated ad, UGC clip, Reel, TikTok, or Short. Receive a machine-readable answer to three questions:
 
-1. What is happening creatively?
-2. What is weakening the video?
-3. What should the editor or generation model change next?
+1. Does this output meet the brief and explicit production rules?
+2. Should the system accept it, revise it, or regenerate it?
+3. What exact segment and prompt should change next?
 
 ## BASIC plan message
 Test the complete workflow on real short-form videos before upgrading.

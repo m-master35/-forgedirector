@@ -13,6 +13,7 @@ const client = new BedrockRuntimeClient({
 });
 
 const MODEL_ID = process.env.BEDROCK_MODEL_ID;
+const VIDEO_FALLBACK_MODEL_ID = process.env.VIDEO_FALLBACK_MODEL_ID || '';
 const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET || '';
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 120000);
 const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_BYTES || 31457280);
@@ -289,8 +290,8 @@ async function invokeVideoAnalysis({ asset, payload }) {
     requirements,
   });
 
-  const sendAnalysis = async (promptText) => client.send(new ConverseCommand({
-    modelId: MODEL_ID,
+  const sendAnalysis = async (modelId, promptText) => client.send(new ConverseCommand({
+    modelId,
     system: [{ text: VIDEO_ANALYSIS_SYSTEM_PROMPT }],
     messages: [{
       role: 'user',
@@ -315,22 +316,29 @@ async function invokeVideoAnalysis({ asset, payload }) {
     },
   }));
 
-  let result = await sendAnalysis(prompt);
+  let usedModelId = MODEL_ID;
+  let result = await sendAnalysis(usedModelId, prompt);
   let rawText = extractText(result);
   let parsed = parseVideoAnalysisModelJson(rawText);
   let retryUsed = false;
+  let fallbackUsed = false;
 
   if (!hasSubstantiveVideoAnalysis(parsed)) {
     retryUsed = true;
-    result = await sendAnalysis(
-      `${prompt}\n\nIMPORTANT RECOVERY INSTRUCTION: The previous response was empty or non-substantive. Inspect the full supplied video carefully and return the complete JSON analysis. Do not return an empty object, empty summary, or all-zero scores unless the video itself is genuinely blank.`,
-    );
+    const recoveryPrompt = `${prompt}\n\nIMPORTANT RECOVERY INSTRUCTION: The primary analysis was empty or non-substantive. Inspect the full supplied video carefully and return the complete JSON analysis. Do not return an empty object, empty summary, or all-zero scores unless the video itself is genuinely blank.`;
+
+    if (VIDEO_FALLBACK_MODEL_ID && VIDEO_FALLBACK_MODEL_ID !== MODEL_ID) {
+      usedModelId = VIDEO_FALLBACK_MODEL_ID;
+      fallbackUsed = true;
+    }
+
+    result = await sendAnalysis(usedModelId, recoveryPrompt);
     rawText = extractText(result);
     parsed = parseVideoAnalysisModelJson(rawText);
   }
 
   if (!hasSubstantiveVideoAnalysis(parsed)) {
-    const error = new Error('The video was received but no reliable visual analysis could be produced. Re-encode the video to a standard MP4/H.264 or supported codec and try again.');
+    const error = new Error('The video was received but no reliable visual analysis could be produced by the primary or fallback analysis path. Try a shorter clip or a different supported encoding.');
     error.statusCode = 422;
     throw error;
   }
@@ -347,6 +355,8 @@ async function invokeVideoAnalysis({ asset, payload }) {
     objective,
     requirements,
     retryUsed,
+    fallbackUsed,
+    modelId: usedModelId,
   };
 }
 
@@ -436,11 +446,12 @@ export const handler = async (event) => {
           analysis: result.analysis,
           meta: {
             operation: 'analyze',
-            modelId: MODEL_ID,
+            modelId: result.modelId,
             platform: result.platform,
             objective: result.objective,
             requirementsApplied: Object.keys(result.requirements || {}).length > 0,
             analysisRetryUsed: result.retryUsed,
+            fallbackModelUsed: result.fallbackUsed,
             asset: {
               id: asset.assetId,
               sizeBytes: asset.sizeBytes,

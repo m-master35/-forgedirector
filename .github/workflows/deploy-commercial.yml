@@ -62,9 +62,9 @@ jobs:
           set -euo pipefail
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/ForgeDirectorCloudFormationExecutionRole"
-          PARAMETER_ARGS=()
+          PARAMETERS=("VideoAssetBucketName=${AWS_SAM_ARTIFACT_BUCKET}")
           if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
-            PARAMETER_ARGS+=(--parameter-overrides "RapidApiProxySecret=${RAPIDAPI_PROXY_SECRET}")
+            PARAMETERS+=("RapidApiProxySecret=${RAPIDAPI_PROXY_SECRET}")
           fi
           sam deploy \
             --template-file .aws-sam/packaged.yaml \
@@ -72,7 +72,7 @@ jobs:
             --region "$AWS_REGION" \
             --role-arn "$EXECUTION_ROLE_ARN" \
             --capabilities CAPABILITY_IAM \
-            "${PARAMETER_ARGS[@]}" \
+            --parameter-overrides "${PARAMETERS[@]}" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -141,7 +141,7 @@ jobs:
           grep -q '"campaign"' /tmp/plan.json
           grep -q '"operation":"plan"' /tmp/plan.json
 
-      - name: Smoke test temporary video upload route
+      - name: Smoke test real video intelligence path
         env:
           API_URL: ${{ steps.api.outputs.url }}
         run: |
@@ -150,10 +150,33 @@ jobs:
           if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
             HEADERS+=(-H "x-rapidapi-proxy-secret: $RAPIDAPI_PROXY_SECRET")
           fi
+
+          ffmpeg -f lavfi -i "testsrc=size=320x568:rate=8" -t 3 -pix_fmt yuv420p -an -y /tmp/test.mp4 >/dev/null 2>&1
+          SIZE=$(stat -c%s /tmp/test.mp4)
+
           STATUS=$(curl -sS -o /tmp/upload.json -w '%{http_code}' \
             -X POST \
             "${HEADERS[@]}" \
-            --data '{"contentType":"video/mp4","sizeBytes":1024}' \
+            --data "{\"contentType\":\"video/mp4\",\"sizeBytes\":$SIZE}" \
             "$API_URL/v1/uploads")
           test "$STATUS" = "200"
-          jq -e '.upload.assetId and .upload.uploadUrl and (.upload.method == "PUT")' /tmp/upload.json >/dev/null
+
+          UPLOAD_URL=$(jq -r '.upload.uploadUrl' /tmp/upload.json)
+          ASSET_ID=$(jq -r '.upload.assetId' /tmp/upload.json)
+          test -n "$UPLOAD_URL"
+          test -n "$ASSET_ID"
+
+          curl -sS -X PUT \
+            -H 'content-type: video/mp4' \
+            --upload-file /tmp/test.mp4 \
+            "$UPLOAD_URL" >/dev/null
+
+          ANALYZE_STATUS=$(curl -sS -o /tmp/analyze.json -w '%{http_code}' \
+            -X POST \
+            "${HEADERS[@]}" \
+            --data "{\"assetId\":\"$ASSET_ID\",\"platform\":\"TikTok\",\"objective\":\"engagement\",\"durationSeconds\":3,\"context\":\"Automated synthetic CI test clip.\"}" \
+            "$API_URL/v1/analyze")
+          cat /tmp/analyze.json
+          test "$ANALYZE_STATUS" = "200"
+          jq -e '.analysis.scores.overall >= 0 and .analysis.scores.overall <= 100' /tmp/analyze.json >/dev/null
+          jq -e '.meta.operation == "analyze"' /tmp/analyze.json >/dev/null

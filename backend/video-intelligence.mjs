@@ -422,6 +422,23 @@ function corpusIncludes(items, rule) {
   return haystack.includes(needle);
 }
 
+function corpusAffirmativelyIncludes(items, rule) {
+  const needle = normalizeMatchText(rule);
+  if (!needle) return false;
+
+  return items.some((item) => {
+    const text = normalizeMatchText(item);
+    const index = text.indexOf(needle);
+    if (index < 0) return false;
+
+    const before = text.slice(Math.max(0, index - 45), index);
+    const after = text.slice(index + needle.length, index + needle.length + 30);
+    const negatedBefore = /(?:^|\s)(?:no|not|without|lacks?|missing|absent)\s+(?:\w+\s+){0,4}$/.test(before);
+    const negatedAfter = /^(?:\s+\w+){0,3}\s+(?:is|are|was|were)?\s*(?:not|absent|missing)/.test(after);
+    return !negatedBefore && !negatedAfter;
+  });
+}
+
 function sourceComplianceChecks(value) {
   const sourceChecks = value?.compliance && typeof value.compliance === 'object'
     ? asArray(value.compliance.checks)
@@ -520,7 +537,7 @@ function normalizeCompliance(value, requirements) {
     }
 
     if (item.type === 'mustNotShow') {
-      if (corpusIncludes(visualEvidence, item.rule)) {
+      if (corpusIncludes(onScreenText, item.rule) || corpusAffirmativelyIncludes(visualEvidence, item.rule)) {
         return {
           ...item,
           status: 'fail',
@@ -540,7 +557,7 @@ function normalizeCompliance(value, requirements) {
     }
 
     if (item.type === 'mustShow') {
-      if (corpusIncludes(visualEvidence, item.rule)) {
+      if (corpusIncludes(onScreenText, item.rule) || corpusAffirmativelyIncludes(visualEvidence, item.rule)) {
         return {
           ...item,
           status: 'pass',

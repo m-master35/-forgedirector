@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - commercial-api-v1
+      - feature/video-intelligence-v1
   pull_request:
 
 permissions:
@@ -29,9 +30,14 @@ jobs:
           node --check backend/director-prompt.mjs
           node --check backend/commercial.mjs
           node --check backend/qa.mjs
+          node --check backend/storage.mjs
+          node --check backend/video-intelligence.mjs
 
       - name: Run commercial QA tests
         run: node tests/commercial-qa.mjs
+
+      - name: Run video intelligence tests
+        run: node tests/video-intelligence.mjs
 
       - name: Check required project files
         run: |
@@ -49,13 +55,18 @@ jobs:
           test -f backend/director-prompt.mjs
           test -f backend/commercial.mjs
           test -f backend/qa.mjs
+          test -f backend/storage.mjs
+          test -f backend/video-intelligence.mjs
           test -f docs/friction-log.md
           test -f commercial/openapi.yaml
           test -f commercial/pricing.md
           test -f commercial/listing.md
+          test -f tests/video-intelligence.mjs
 
       - name: Sanity-check OpenAPI routes
         run: |
+          grep -q '^  /v1/uploads:' commercial/openapi.yaml
+          grep -q '^  /v1/analyze:' commercial/openapi.yaml
           grep -q '^  /v1/plan:' commercial/openapi.yaml
           grep -q '^  /v1/revise:' commercial/openapi.yaml
           grep -q '^  /v1/qa:' commercial/openapi.yaml

@@ -288,13 +288,29 @@ function objectiveWeights(objective) {
   return SCORE_WEIGHTS_BY_OBJECTIVE[objective] || SCORE_WEIGHTS_BY_OBJECTIVE.engagement;
 }
 
-function normalizeCompliance(value, requirements) {
-  const hasRequirements = requirements
-    && typeof requirements === 'object'
-    && !Array.isArray(requirements)
-    && Object.keys(requirements).length > 0;
+function expectedRequirementChecks(requirements) {
+  const checks = [];
+  const add = (type, rules) => {
+    for (const rule of asArray(rules)) {
+      const text = String(rule || '').trim();
+      if (text) checks.push({ type, rule: text });
+    }
+  };
 
-  if (!hasRequirements) {
+  add('mustShow', requirements?.mustShow);
+  add('mustNotShow', requirements?.mustNotShow);
+  add('mustIncludeText', requirements?.mustIncludeText);
+  add('continuityRule', requirements?.continuityRules);
+  if (requirements?.ctaRequired === true) {
+    checks.push({ type: 'ctaRequired', rule: 'CTA is required' });
+  }
+  return checks;
+}
+
+function normalizeCompliance(value, requirements) {
+  const expected = expectedRequirementChecks(requirements);
+
+  if (expected.length === 0) {
     return {
       status: 'not_requested',
       passed: null,
@@ -308,7 +324,7 @@ function normalizeCompliance(value, requirements) {
     ? asArray(value.compliance.checks)
     : [];
 
-  const checks = sourceChecks.slice(0, 80).map((check) => {
+  const normalizedSource = sourceChecks.slice(0, 80).map((check) => {
     const status = ['pass', 'fail', 'uncertain'].includes(String(check?.status || '').toLowerCase())
       ? String(check.status).toLowerCase()
       : 'uncertain';
@@ -320,6 +336,40 @@ function normalizeCompliance(value, requirements) {
       timestampSeconds: Number.isFinite(Number(check?.timestampSeconds))
         ? Math.max(0, Number(check.timestampSeconds))
         : null,
+    };
+  });
+
+  const used = new Set();
+  const checks = expected.map((item) => {
+    const target = item.rule.toLowerCase();
+    let index = normalizedSource.findIndex((check, candidateIndex) => {
+      if (used.has(candidateIndex)) return false;
+      const sameType = check.type.toLowerCase() === item.type.toLowerCase();
+      const sameRule = check.rule.toLowerCase() === target;
+      return sameType && sameRule;
+    });
+
+    if (index < 0) {
+      index = normalizedSource.findIndex((check, candidateIndex) => {
+        if (used.has(candidateIndex)) return false;
+        return check.rule.toLowerCase() === target;
+      });
+    }
+
+    if (index < 0) {
+      return {
+        ...item,
+        status: 'uncertain',
+        evidence: 'The analysis did not return evidence for this required check.',
+        timestampSeconds: null,
+      };
+    }
+
+    used.add(index);
+    return {
+      ...normalizedSource[index],
+      type: item.type,
+      rule: item.rule,
     };
   });
 

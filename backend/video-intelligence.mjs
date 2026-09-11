@@ -104,6 +104,7 @@ Important rules:
 - If spoken content cannot be reliably determined from the video input and no transcript is supplied, set speech-dependent fields to null or explain the limitation.
 - Give precise timestamps when reasonably observable; otherwise use your best approximate timestamp and mark it approximate.
 - Numeric scores must agree with qualitative verdicts: strong should normally be 70-100, mixed 35-69, and weak 0-45.
+- If PRODUCTION REQUIREMENTS are supplied, evaluate every supplied rule. Never silently omit a rule. Mark a rule uncertain when the video does not provide enough evidence.
 - Prioritize actionable corrections that an editor, video-generation model, or automation system can execute.
 - For regeneration prompts, describe only the replacement segment and preserve identity, product, wardrobe, setting, lighting, and camera continuity unless a change is explicitly recommended.
 - Keep arrays concise and ranked by impact.
@@ -186,6 +187,17 @@ Return this JSON shape:
     "instagramReels": ["..."],
     "youtubeShorts": ["..."]
   },
+  "compliance": {
+    "checks": [
+      {
+        "type": "mustShow|mustNotShow|mustIncludeText|continuityRule|ctaRequired",
+        "rule": "exact supplied rule",
+        "status": "pass|fail|uncertain",
+        "evidence": "brief observable evidence",
+        "timestampSeconds": 0
+      }
+    ]
+  },
   "limitations": ["only genuine analysis limitations"]
 }`;
 
@@ -196,12 +208,16 @@ export function buildVideoAnalysisPrompt({
   context = '',
   transcript = '',
   declaredDurationSeconds = null,
+  requirements = {},
 } = {}) {
   const safePlatform = String(platform || 'General');
   const safeObjective = String(objective || 'engagement');
   const safeAudience = String(audience || '').trim();
   const safeContext = String(context || '').trim();
   const safeTranscript = String(transcript || '').trim();
+  const safeRequirements = requirements && typeof requirements === 'object' && !Array.isArray(requirements)
+    ? requirements
+    : {};
 
   return [
     'Analyze this short-form video for production and creative intelligence.',
@@ -211,8 +227,11 @@ export function buildVideoAnalysisPrompt({
     safeAudience ? `TARGET AUDIENCE: ${safeAudience}` : '',
     safeContext ? `CREATIVE CONTEXT: ${safeContext}` : '',
     safeTranscript ? `SUPPLIED TRANSCRIPT:\n${safeTranscript}` : 'SUPPLIED TRANSCRIPT: none',
+    Object.keys(safeRequirements).length
+      ? `PRODUCTION REQUIREMENTS:\n${JSON.stringify(safeRequirements)}`
+      : 'PRODUCTION REQUIREMENTS: none',
     '',
-    'Focus on the first three seconds, pacing, clarity, visual execution, continuity, CTA, platform fit, retention risks, and exact corrective actions.',
+    'Focus on the first three seconds, pacing, clarity, visual execution, continuity, CTA, platform fit, retention risks, exact corrective actions, and any supplied production requirements.',
     'Return JSON only.',
   ].filter(Boolean).join('\n');
 }
@@ -269,7 +288,55 @@ function objectiveWeights(objective) {
   return SCORE_WEIGHTS_BY_OBJECTIVE[objective] || SCORE_WEIGHTS_BY_OBJECTIVE.engagement;
 }
 
-function qualityGate(scores, retentionRisks, fixes) {
+function normalizeCompliance(value, requirements) {
+  const hasRequirements = requirements
+    && typeof requirements === 'object'
+    && !Array.isArray(requirements)
+    && Object.keys(requirements).length > 0;
+
+  if (!hasRequirements) {
+    return {
+      status: 'not_requested',
+      passed: null,
+      failedCount: 0,
+      uncertainCount: 0,
+      checks: [],
+    };
+  }
+
+  const sourceChecks = value?.compliance && typeof value.compliance === 'object'
+    ? asArray(value.compliance.checks)
+    : [];
+
+  const checks = sourceChecks.slice(0, 80).map((check) => {
+    const status = ['pass', 'fail', 'uncertain'].includes(String(check?.status || '').toLowerCase())
+      ? String(check.status).toLowerCase()
+      : 'uncertain';
+    return {
+      type: String(check?.type || 'requirement').trim(),
+      rule: String(check?.rule || '').trim(),
+      status,
+      evidence: String(check?.evidence || '').trim(),
+      timestampSeconds: Number.isFinite(Number(check?.timestampSeconds))
+        ? Math.max(0, Number(check.timestampSeconds))
+        : null,
+    };
+  });
+
+  const failedCount = checks.filter((check) => check.status === 'fail').length;
+  const uncertainCount = checks.filter((check) => check.status === 'uncertain').length;
+  const status = failedCount > 0 ? 'fail' : uncertainCount > 0 ? 'needs_review' : 'pass';
+
+  return {
+    status,
+    passed: status === 'pass',
+    failedCount,
+    uncertainCount,
+    checks,
+  };
+}
+
+function qualityGate(scores, retentionRisks, fixes, compliance) {
   const highRisks = retentionRisks.filter((risk) => String(risk?.severity || '').toLowerCase() === 'high');
   const highImpactFixes = fixes.filter((fix) => String(fix?.impact || '').toLowerCase() === 'high');
   const blockers = [];
@@ -292,7 +359,16 @@ function qualityGate(scores, retentionRisks, fixes) {
     action = 'accept';
   }
 
+  if (compliance?.status === 'fail' && action === 'accept') action = 'revise';
+  if (compliance?.status === 'needs_review' && action === 'accept') action = 'revise';
+
   const reasons = [];
+  if (compliance?.status === 'fail') {
+    reasons.push(`${compliance.failedCount} explicit production requirement(s) failed.`);
+  } else if (compliance?.status === 'needs_review') {
+    reasons.push(`${compliance.uncertainCount} production requirement(s) need review.`);
+  }
+
   if (action === 'accept') {
     reasons.push('Overall creative-quality score cleared the acceptance threshold.');
     reasons.push('Hook, clarity, and platform-fit floors were met with no high-severity retention risk.');
@@ -328,7 +404,7 @@ function qualityGate(scores, retentionRisks, fixes) {
   };
 }
 
-export function normalizeVideoAnalysis(value, { objective = 'engagement' } = {}) {
+export function normalizeVideoAnalysis(value, { objective = 'engagement', requirements = {} } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Video analysis model returned an invalid JSON object.');
   }
@@ -352,6 +428,7 @@ export function normalizeVideoAnalysis(value, { objective = 'engagement' } = {})
   const timeline = normalizeTimeline(value.timeline);
   const retentionRisks = asArray(value.retentionRisks).slice(0, 12);
   const fixes = asArray(value.fixes).slice(0, 12);
+  const compliance = normalizeCompliance(value, requirements);
 
   return {
     analysisVersion: '1.2',
@@ -363,7 +440,8 @@ export function normalizeVideoAnalysis(value, { objective = 'engagement' } = {})
     summary: String(value.summary || '').trim(),
     creativeAngle: String(value.creativeAngle || '').trim(),
     scores,
-    qualityGate: qualityGate(scores, retentionRisks, fixes),
+    compliance,
+    qualityGate: qualityGate(scores, retentionRisks, fixes, compliance),
     hook: value.hook && typeof value.hook === 'object' ? value.hook : {},
     timeline,
     retentionRisks,

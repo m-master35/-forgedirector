@@ -10,6 +10,8 @@ on:
       - backend/commercial.mjs
       - backend/director-prompt.mjs
       - backend/qa.mjs
+      - backend/storage.mjs
+      - backend/video-intelligence.mjs
       - backend/package.json
       - commercial-template.yaml
 
@@ -98,27 +100,60 @@ jobs:
           cat /tmp/health.json
           test "$STATUS" = "200"
           grep -q '"status":"ok"' /tmp/health.json
+          grep -q '"analyze":"POST /v1/analyze"' /tmp/health.json
 
           curl -sS -D /tmp/cors.headers -o /dev/null \
             -X OPTIONS \
             -H 'Origin: https://rapidapi.com' \
             -H 'Access-Control-Request-Method: GET' \
             "$API_URL/health"
-          cat /tmp/cors.headers
           grep -qi '^access-control-allow-origin: https://rapidapi.com' /tmp/cors.headers
           grep -qi '^access-control-allow-methods: .*GET' /tmp/cors.headers
 
-      - name: Smoke test Bedrock plan endpoint
+      - name: Smoke test gateway lock and Bedrock plan endpoint
         env:
           API_URL: ${{ steps.api.outputs.url }}
         run: |
           set -euo pipefail
-          STATUS=$(curl -sS -o /tmp/plan.json -w '%{http_code}' \
+          PAYLOAD='{"brief":"Create a concise 10-second vertical social ad for a fictional productivity drink aimed at young professionals."}'
+
+          DIRECT_STATUS=$(curl -sS -o /tmp/direct-plan.json -w '%{http_code}' \
             -X POST \
             -H 'content-type: application/json' \
-            --data '{"brief":"Create a concise 10-second vertical social ad for a fictional productivity drink aimed at young professionals."}' \
+            --data "$PAYLOAD" \
             "$API_URL/v1/plan")
-          cat /tmp/plan.json
-          test "$STATUS" = "200"
+
+          if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
+            test "$DIRECT_STATUS" = "401"
+            grep -q 'Unauthorized gateway request' /tmp/direct-plan.json
+            AUTH_STATUS=$(curl -sS -o /tmp/plan.json -w '%{http_code}' \
+              -X POST \
+              -H 'content-type: application/json' \
+              -H "x-rapidapi-proxy-secret: $RAPIDAPI_PROXY_SECRET" \
+              --data "$PAYLOAD" \
+              "$API_URL/v1/plan")
+          else
+            AUTH_STATUS="$DIRECT_STATUS"
+            cp /tmp/direct-plan.json /tmp/plan.json
+          fi
+
+          test "$AUTH_STATUS" = "200"
           grep -q '"campaign"' /tmp/plan.json
           grep -q '"operation":"plan"' /tmp/plan.json
+
+      - name: Smoke test temporary video upload route
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: |
+          set -euo pipefail
+          HEADERS=(-H 'content-type: application/json')
+          if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
+            HEADERS+=(-H "x-rapidapi-proxy-secret: $RAPIDAPI_PROXY_SECRET")
+          fi
+          STATUS=$(curl -sS -o /tmp/upload.json -w '%{http_code}' \
+            -X POST \
+            "${HEADERS[@]}" \
+            --data '{"contentType":"video/mp4","sizeBytes":1024}' \
+            "$API_URL/v1/uploads")
+          test "$STATUS" = "200"
+          jq -e '.upload.assetId and .upload.uploadUrl and (.upload.method == "PUT")' /tmp/upload.json >/dev/null

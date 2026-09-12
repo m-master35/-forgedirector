@@ -1148,7 +1148,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     retryUsed = true;
     coverageRetryUsed = true;
 
-    const coverageRecoveryPrompt = `${prompt}\n\nFULL-DURATION RECOVERY REQUIRED: Your previous timeline did not demonstrate inspection of the complete declared ${declaredDurationSeconds}-second video. Reinspect the ENTIRE supplied clip from first frame through final frame. Return chronological timeline segments spanning opening, middle, and end. The final timeline endSeconds must reach at least 85% of ${declaredDurationSeconds}. Re-evaluate continuity, CTA, mustShow, mustNotShow, mustIncludeText, and all other requirements using evidence from the whole clip. Do not state that analysis is limited to the first three seconds.`;
+    const coverageRecoveryPrompt = `${prompt}\n\nFULL-DURATION RECOVERY REQUIRED: Your previous timeline did not demonstrate inspection of the complete declared ${declaredDurationSeconds}-second video. Reinspect the ENTIRE supplied clip from first frame through final frame. Return chronological timeline segments spanning opening, middle, and end. Timeline intervals must collectively cover at least 95% of ${declaredDurationSeconds}, beginning near 0 seconds and reaching the final 5% of the clip without skipping large middle sections. Re-evaluate continuity, CTA, mustShow, mustNotShow, mustIncludeText, and all other requirements using evidence from the whole clip. Do not state that analysis is limited to the first three seconds.`;
 
     if (VIDEO_FALLBACK_MODEL_ID) {
       usedModelId = VIDEO_FALLBACK_MODEL_ID;

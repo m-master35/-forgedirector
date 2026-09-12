@@ -1244,6 +1244,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
         const verifierParsed = parseVideoAnalysisModelJson(extractText(verifierResult));
         if (!verifierParsed) {
           lastVerifierError = new Error('Blind compliance verifier returned invalid JSON.');
+          lastVerifierError.diagnosticCode = 'compliance_verifier_invalid_json';
           continue;
         }
 
@@ -1261,6 +1262,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
           const recoveryParsed = parseVideoAnalysisModelJson(extractText(recoveryResult));
           if (!recoveryParsed) {
             lastVerifierError = new Error('Blind compliance verifier recovery returned invalid JSON.');
+            lastVerifierError.diagnosticCode = 'compliance_verifier_recovery_invalid_json';
             continue;
           }
           const recoveryCoverage = assessVideoAnalysisCoverage(
@@ -1269,6 +1271,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
           );
           if (recoveryCoverage.fullDurationReviewed !== true) {
             lastVerifierError = new Error('Blind compliance verifier did not demonstrate full-duration coverage.');
+            lastVerifierError.diagnosticCode = 'compliance_verifier_incomplete_coverage';
             continue;
           }
           verifiedCompliance = normalizeVideoCompliance(recoveryParsed, requirements);
@@ -1284,6 +1287,22 @@ async function invokeVideoAnalysis({ asset, payload }) {
 
         if (verifiedCompliance) break;
       } catch (error) {
+        const name = String(error?.name || error?.Code || '');
+        const status = Number(error?.$metadata?.httpStatusCode || 0);
+        error.diagnosticCode = error?.diagnosticCode
+          || (
+            name === 'ValidationException'
+              ? 'compliance_verifier_model_validation'
+              : name === 'ThrottlingException'
+                ? 'compliance_verifier_model_throttled'
+                : name === 'ModelTimeoutException'
+                  ? 'compliance_verifier_model_timeout'
+                  : name === 'ServiceUnavailableException'
+                    ? 'compliance_verifier_model_unavailable'
+                    : status >= 500
+                      ? 'compliance_verifier_model_5xx'
+                      : 'compliance_verifier_model_error'
+          );
         lastVerifierError = error;
         complianceVerificationRetryUsed = true;
       }
@@ -1294,6 +1313,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
         'The video was analyzed, but ForgeDirector could not independently verify the supplied production requirements. No potentially context-influenced compliance verdict was returned.',
       );
       error.statusCode = 422;
+      error.diagnosticCode = lastVerifierError?.diagnosticCode || 'compliance_verifier_unresolved';
       error.cause = lastVerifierError;
       throw error;
     }
@@ -1585,6 +1605,7 @@ export const handler = async (event) => {
       error: error?.statusCode && error.statusCode < 500
         ? error.message
         : 'The creative intelligence engine could not complete the request.',
+      ...(error?.diagnosticCode ? { diagnosticCode: error.diagnosticCode } : {}),
       requestId,
     });
   }

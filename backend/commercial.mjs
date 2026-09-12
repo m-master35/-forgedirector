@@ -466,6 +466,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   const initialQa = qa;
   let repairUsed = false;
   let rescueRewriteUsed = false;
+  let candidateTournamentUsed = false;
+  let candidateTournamentAttempts = 0;
   let creativeCritique = null;
   let criticUsage = null;
 
@@ -602,12 +604,78 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
+  if (!creativeCritique || critiqueNeedsRepair(creativeCritique)) {
+    candidateTournamentUsed = true;
+    const tournamentModel = VIDEO_FALLBACK_MODEL_ID || usedModelId;
+    const variants = [
+      'ALTERNATIVE A: prioritize a visually arresting first frame, one concrete action per scene, and a clean before-to-after progression. Avoid montage filler.',
+      'ALTERNATIVE B: prioritize product/subject specificity, generator-ready camera blocking, exact lighting continuity, and a distinct payoff composition. Avoid generic marketing imagery.',
+    ];
+
+    for (const variant of variants) {
+      candidateTournamentAttempts += 1;
+      const tournamentPrompt = `${message}\n\nQUALITY TOURNAMENT: Create a fresh alternative manifest rather than editing the previous candidate. ${variant} Resolve all known weak dimensions. Return JSON only.`;
+
+      try {
+        const altResult = await sendDirector(tournamentModel, tournamentPrompt);
+        const altParsed = parseDirectorJson(extractText(altResult));
+        if (!altParsed) continue;
+
+        let altCandidate = normalizeCampaignManifest(altParsed, {
+          request,
+          previousCampaign: campaign,
+          isRevision,
+        });
+        if (isRevision && campaign) {
+          altCandidate = applyRevisionPreservation(altCandidate, campaign, request?.rawBrief || '');
+        }
+
+        const altQa = evaluateCampaign(altCandidate);
+        if (!altQa.passed || altQa.score < 90) continue;
+
+        let altCritique = null;
+        let altCriticUsage = null;
+        try {
+          const criticResult = await runCreativeCritic(altCandidate);
+          altCritique = criticResult.critique;
+          altCriticUsage = criticResult.usage;
+        } catch {
+          altCritique = null;
+        }
+        if (!altCritique) continue;
+
+        const currentPass = creativeCritique?.passed === true;
+        const altPass = altCritique.passed === true;
+        const currentScore = creativeCritique?.score ?? 0;
+        const altScore = altCritique.score ?? 0;
+
+        if (
+          (altPass && !currentPass)
+          || (altPass === currentPass && altScore > currentScore)
+        ) {
+          normalized = altCandidate;
+          qa = altQa;
+          result = altResult;
+          usedModelId = tournamentModel;
+          creativeCritique = altCritique;
+          if (altCriticUsage) criticUsage = altCriticUsage;
+        }
+
+        if (creativeCritique?.passed) break;
+      } catch {
+        // Continue to the next bounded candidate.
+      }
+    }
+  }
+
   try {
     return {
       campaign: validateManifest(normalized),
       usage: result?.usage || null,
       repairUsed,
       rescueRewriteUsed,
+      candidateTournamentUsed,
+      candidateTournamentAttempts,
       briefEnrichmentUsed,
       briefEnrichment,
       degradedFallbackUsed,
@@ -628,6 +696,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       usage: result?.usage || null,
       repairUsed,
       rescueRewriteUsed,
+      candidateTournamentUsed,
+      candidateTournamentAttempts,
       briefEnrichmentUsed,
       briefEnrichment,
       degradedFallbackUsed,
@@ -934,6 +1004,8 @@ export const handler = async (event) => {
           assumptions: request.assumptions,
           automaticRepairUsed: result.repairUsed,
           rescueRewriteUsed: result.rescueRewriteUsed,
+          candidateTournamentUsed: result.candidateTournamentUsed,
+          candidateTournamentAttempts: result.candidateTournamentAttempts,
           briefEnrichmentUsed: result.briefEnrichmentUsed,
           briefEnrichment: result.briefEnrichment,
           degradedFallbackUsed: result.degradedFallbackUsed,
@@ -975,6 +1047,8 @@ export const handler = async (event) => {
           assumptions: request.assumptions,
           automaticRepairUsed: result.repairUsed,
           rescueRewriteUsed: result.rescueRewriteUsed,
+          candidateTournamentUsed: result.candidateTournamentUsed,
+          candidateTournamentAttempts: result.candidateTournamentAttempts,
           briefEnrichmentUsed: result.briefEnrichmentUsed,
           briefEnrichment: result.briefEnrichment,
           degradedFallbackUsed: result.degradedFallbackUsed,

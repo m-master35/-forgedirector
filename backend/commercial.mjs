@@ -1265,6 +1265,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     ].filter(Boolean))];
 
     const verificationRecords = [];
+    const verifierDiagnostics = [];
     let lastVerifierError = null;
     const verifierUsageTotals = {
       inputTokens: 0,
@@ -1280,6 +1281,19 @@ async function invokeVideoAnalysis({ asset, payload }) {
       if (Number.isFinite(inputTokens) && inputTokens > 0) verifierUsageTotals.inputTokens += inputTokens;
       if (Number.isFinite(outputTokens) && outputTokens > 0) verifierUsageTotals.outputTokens += outputTokens;
       if (Number.isFinite(totalTokens) && totalTokens > 0) verifierUsageTotals.totalTokens += totalTokens;
+    };
+
+    const verifierErrorCode = (error) => {
+      const name = String(error?.name || error?.Code || '');
+      const status = Number(error?.$metadata?.httpStatusCode || 0);
+      if (name === 'ValidationException') return 'model_validation';
+      if (name === 'ThrottlingException') return 'model_throttled';
+      if (name === 'ModelTimeoutException') return 'model_timeout';
+      if (name === 'ServiceUnavailableException') return 'model_unavailable';
+      if (name === 'ModelNotReadyException') return 'model_not_ready';
+      if (name === 'ModelErrorException' || status === 424) return 'model_execution';
+      if (status >= 500) return 'model_5xx';
+      return `model_error_${name || 'unknown'}`;
     };
 
     for (const verifierModelId of complianceModels) {
@@ -1303,6 +1317,11 @@ async function invokeVideoAnalysis({ asset, payload }) {
         if (!verifierParsed) {
           lastVerifierError = new Error('Blind compliance verifier returned invalid JSON after one recovery attempt.');
           lastVerifierError.diagnosticCode = 'compliance_verifier_invalid_json';
+          verifierDiagnostics.push({
+            modelId: verifierModelId,
+            stage: 'json',
+            code: 'invalid_json',
+          });
           continue;
         }
 
@@ -1310,6 +1329,11 @@ async function invokeVideoAnalysis({ asset, payload }) {
         if (!normalizedCompliance) {
           lastVerifierError = new Error('Blind compliance verifier did not return a usable normalized compliance result.');
           lastVerifierError.diagnosticCode = 'compliance_verifier_unusable_result';
+          verifierDiagnostics.push({
+            modelId: verifierModelId,
+            stage: 'normalize',
+            code: 'unusable_result',
+          });
           continue;
         }
 
@@ -1374,6 +1398,14 @@ async function invokeVideoAnalysis({ asset, payload }) {
             'Blind compliance verifier did not demonstrate required full-duration coverage.',
           );
           lastVerifierError.diagnosticCode = 'compliance_verifier_incomplete_coverage';
+          verifierDiagnostics.push({
+            modelId: verifierModelId,
+            stage: 'coverage',
+            code: 'incomplete_coverage',
+            coverageRatio: verifierCoverage?.coverageRatio ?? null,
+            observedThroughSeconds: verifierCoverage?.observedThroughSeconds ?? null,
+            timelineSegments: verifierCoverage?.timelineSegments ?? null,
+          });
           continue;
         }
 
@@ -1382,6 +1414,14 @@ async function invokeVideoAnalysis({ asset, payload }) {
           compliance: normalizedCompliance,
           coverage: verifierCoverage,
           usage: verifierResult?.usage || null,
+        });
+        verifierDiagnostics.push({
+          modelId: verifierModelId,
+          stage: 'complete',
+          code: 'usable',
+          coverageRatio: verifierCoverage?.coverageRatio ?? null,
+          observedThroughSeconds: verifierCoverage?.observedThroughSeconds ?? null,
+          timelineSegments: verifierCoverage?.timelineSegments ?? null,
         });
       } catch (error) {
         const name = String(error?.name || error?.Code || '');
@@ -1405,6 +1445,13 @@ async function invokeVideoAnalysis({ asset, payload }) {
                           : 'compliance_verifier_model_error'
           );
         lastVerifierError = error;
+        verifierDiagnostics.push({
+          modelId: verifierModelId,
+          stage: 'invoke',
+          code: verifierErrorCode(error),
+          errorName: String(error?.name || error?.Code || 'Error'),
+          httpStatus: Number(error?.$metadata?.httpStatusCode || 0) || null,
+        });
         complianceVerificationRetryUsed = true;
       }
     }
@@ -1415,6 +1462,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
       );
       error.statusCode = 422;
       error.diagnosticCode = lastVerifierError?.diagnosticCode || 'compliance_verifier_unresolved';
+      error.verifierDiagnostics = verifierDiagnostics;
       error.cause = lastVerifierError;
       throw error;
     }
@@ -1461,6 +1509,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     complianceVerificationCoverage,
     complianceVerificationAgreement,
     complianceVerificationConsensusUsed,
+    complianceVerificationDiagnostics: verifierDiagnostics,
   };
 }
 
@@ -1573,6 +1622,7 @@ export const handler = async (event) => {
             complianceVerificationCoverage: result.complianceVerificationCoverage,
             complianceVerificationAgreement: result.complianceVerificationAgreement,
             complianceVerificationConsensusUsed: result.complianceVerificationConsensusUsed,
+            complianceVerificationDiagnostics: result.complianceVerificationDiagnostics,
             asset: {
               id: asset.assetId,
               sizeBytes: asset.sizeBytes,
@@ -1734,6 +1784,9 @@ export const handler = async (event) => {
         ? error.message
         : 'The creative intelligence engine could not complete the request.',
       ...(error?.diagnosticCode ? { diagnosticCode: error.diagnosticCode } : {}),
+      ...(Array.isArray(error?.verifierDiagnostics)
+        ? { verifierDiagnostics: error.verifierDiagnostics }
+        : {}),
       requestId,
     });
   }

@@ -532,23 +532,23 @@ function normalizeCompliance(value, requirements) {
     }
 
     if (item.type === 'mustIncludeText') {
-      if (corpusIncludes(onScreenText, item.rule)) {
-        return {
-          ...item,
-          status: 'pass',
-          evidence: `Required on-screen text observed: "${item.rule}".`,
-          timestampSeconds: source?.timestampSeconds ?? null,
-        };
-      }
-      if (source && source.status !== 'uncertain') return { ...source, type: item.type, rule: item.rule };
       if (onScreenText.length > 0) {
+        if (corpusAffirmativelyIncludes(onScreenText, item.rule)) {
+          return {
+            ...item,
+            status: 'pass',
+            evidence: `Required on-screen text observed affirmatively: "${item.rule}".`,
+            timestampSeconds: source?.timestampSeconds ?? null,
+          };
+        }
         return {
           ...item,
           status: 'fail',
-          evidence: `Required on-screen text was not observed. Extracted text: ${onScreenText.join(' | ')}`,
+          evidence: `Required on-screen text was not affirmatively observed. Extracted text: ${onScreenText.join(' | ')}`,
           timestampSeconds: null,
         };
       }
+      if (source && source.status !== 'uncertain') return { ...source, type: item.type, rule: item.rule };
     }
 
     if (item.type === 'mustNotShow') {

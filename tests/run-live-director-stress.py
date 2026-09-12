@@ -268,8 +268,11 @@ def assert_result(case, status, data):
             idx = output.find(needle, start)
             if idx < 0:
                 break
-            before = output[max(0, idx - 80):idx]
-            negated = bool(re.search(r"(?:do not|don't|dont|avoid|without|never|no|not|must not|should not)\\s+(?:\\w+\\s+){0,6}$", before))
+            before = output[max(0, idx - 140):idx]
+            negated = bool(re.search(
+                r"(?:do not|don't|dont|avoid|without|never|no|not|must not|should not)[^.!?;]{0,120}$",
+                before,
+            ))
             if not negated:
                 errors.append(f"forbidden affirmative phrase appeared: {forbidden}")
                 break

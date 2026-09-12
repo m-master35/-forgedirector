@@ -128,6 +128,10 @@ jobs:
             --data "$PAYLOAD" \
             "$API_URL/v1/plan")
 
+          echo "DIRECT_STATUS=$DIRECT_STATUS"
+          cat /tmp/direct-plan.json || true
+          echo
+
           if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
             test "$DIRECT_STATUS" = "401"
             grep -q 'Unauthorized gateway request' /tmp/direct-plan.json
@@ -142,6 +146,9 @@ jobs:
             cp /tmp/direct-plan.json /tmp/plan.json
           fi
 
+          echo "AUTH_STATUS=$AUTH_STATUS"
+          cat /tmp/plan.json || true
+          echo
           test "$AUTH_STATUS" = "200"
           grep -q '"campaign"' /tmp/plan.json
           grep -q '"operation":"plan"' /tmp/plan.json

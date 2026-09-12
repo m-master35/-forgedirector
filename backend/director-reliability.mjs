@@ -297,6 +297,52 @@ function generatorPrompt({ role, visual, aspectRatio, continuityText, index = 0,
   return productionLock({ role, visual, aspectRatio, continuityText, index, count });
 }
 
+function roleCameraClause(role) {
+  if (role === 'hook') return 'Camera: begin on a tight macro or close-medium frame and use one controlled push-in, snap reveal, or short motivated track during the first 1-2 seconds.';
+  if (role === 'payoff') return 'Camera: settle into a stable medium, product-hero, or clean detail frame with a subtle pull-back or focus settle.';
+  if (role === 'proof') return 'Camera: use a deliberate detail-to-context move, short lateral track, or focus pull tied to the subject action.';
+  return 'Camera: start at a readable medium or close-medium frame, then pan, track, or push toward the exact action with one physically motivated move.';
+}
+
+function roleProgressionClause(role) {
+  if (role === 'hook') return 'Progression: open in medias res on the most distinctive problem, action, or product detail and end on a visible change that motivates the next cut.';
+  if (role === 'payoff') return 'Progression: show a visibly resolved end state that contrasts with the opening composition instead of repeating it.';
+  if (role === 'proof') return 'Progression: reveal one new observable detail or consequence that has not appeared in earlier scenes.';
+  return 'Progression: show one concrete interaction, transformation, or observable state change that moves the story toward the payoff.';
+}
+
+function enrichGenerationPrompt(rawPrompt, {
+  role,
+  visual,
+  aspectRatio,
+  continuityText,
+}) {
+  let text = cleanText(rawPrompt, 4000);
+  const additions = [];
+
+  if (text.length < 80) {
+    additions.push(`Short-form ${aspectRatio} ${role} scene. ${visual}`);
+  }
+  if (!/camera|shot|frame|close[- ]?up|wide|medium|macro|push|pull|pan|tilt|orbit|dolly|track/i.test(text)) {
+    additions.push(roleCameraClause(role));
+  }
+  if (!/light|lighting|shadow|exposure|backlit|softbox|sun|neon|practical/i.test(text)) {
+    additions.push('Lighting: use a clear, coherent key-light direction and exposure logic that matches connected scenes.');
+  }
+  if (!/progression|transform|change|reveal|action|interaction|payoff|before|after|resolve/i.test(text)) {
+    additions.push(roleProgressionClause(role));
+  }
+  if (!/continuity|same (?:person|product|subject|wardrobe|environment)|identity|palette|styling/i.test(text)) {
+    additions.push(`Continuity: ${continuityText}.`);
+  }
+  if (!/negative constraints:|avoid:|no identity drift|no random logos|no extra text/i.test(text)) {
+    additions.push('Negative constraints: no identity drift, no wardrobe or product-color drift, no unrelated people, no random logos, no extra text overlays unless requested, no warped anatomy, no duplicate objects, no geometry mutations, no unexplained environment reset, no sudden style or palette change.');
+  }
+
+  text = [text, ...additions].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  return text.slice(0, 4000);
+}
+
 export function normalizeCampaignManifest(candidate, {
   request = {},
   previousCampaign = null,
@@ -349,34 +395,19 @@ export function normalizeCampaignManifest(candidate, {
       : `${baseVisual} ${roleCue}`.slice(0, 1800);
 
     const rawGenerationPrompt = cleanText(scene.generationPrompt, 4000);
-    const baseProductionLock = productionLock({
+    const enrichedGenerationPrompt = enrichGenerationPrompt(rawGenerationPrompt, {
       role,
       visual: visualDirection,
       aspectRatio,
       continuityText,
-      index,
-      count: scenes.length,
     });
-
-    const requiredSignals = [
-      /camera path:|camera|shot|frame|close[- ]?up|wide|medium|macro|push|pull|pan|tilt|orbit|dolly|track/i,
-      /lighting lock:|light|lighting|shadow|exposure|backlit|softbox|sun|neon|practical/i,
-      /progression cue:|progression|transform|change|reveal|action|interaction|payoff/i,
-      /continuity lock:|continuity|same (?:person|product|subject|wardrobe|environment)/i,
-      /negative constraints:|avoid:|no identity drift|no random logos/i,
-    ];
-    const signalCount = requiredSignals.filter((pattern) => pattern.test(rawGenerationPrompt)).length;
-    const needsProductionEnrichment = rawGenerationPrompt.length < 180 || signalCount < requiredSignals.length;
-    const enrichedGenerationPrompt = needsProductionEnrichment
-      ? `${rawGenerationPrompt} ${baseProductionLock}`.trim()
-      : rawGenerationPrompt;
 
     return {
       id: index + 1,
       durationSeconds: durations[index],
       visualDirection,
       voiceover: safeVoiceover(scene.voiceover, role, durations[index]),
-      generationPrompt: enrichedGenerationPrompt.slice(0, 4000),
+      generationPrompt: enrichedGenerationPrompt,
     };
   });
 

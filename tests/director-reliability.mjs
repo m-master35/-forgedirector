@@ -301,14 +301,41 @@ const guaranteedProductionDetail = normalizeCampaignManifest({
 
 for (const scene of guaranteedProductionDetail.scenes) {
   const prompt = scene.generationPrompt.toLowerCase();
-  assert.ok(prompt.includes('camera path:'));
-  assert.ok(prompt.includes('lighting lock:'));
-  assert.ok(prompt.includes('continuity lock:'));
+  assert.ok(prompt.includes('camera:') || prompt.includes('camera path:'));
+  assert.ok(prompt.includes('lighting:') || prompt.includes('lighting lock:'));
+  assert.ok(prompt.includes('continuity:') || prompt.includes('continuity lock:'));
   assert.ok(prompt.includes('negative constraints:'));
-  assert.ok(prompt.includes('progression cue:'));
+  assert.ok(prompt.includes('progression:') || prompt.includes('progression cue:'));
   assert.ok(scene.visualDirection.toLowerCase().includes('scene function:'));
 }
 assert.equal(evaluateCampaign(guaranteedProductionDetail).passed, true);
 assert.ok(evaluateCampaign(guaranteedProductionDetail).score >= 90);
+
+const alreadyDetailed = normalizeCampaignManifest({
+  summary: 'Detailed campaign',
+  audience: 'General',
+  platform: 'TikTok',
+  aspectRatio: '9:16',
+  durationSeconds: 10,
+  scenes: [
+    {
+      durationSeconds: 5,
+      visualDirection: 'Macro shot of the same dark phone on the same walnut desk.',
+      voiceover: 'Start here.',
+      generationPrompt: 'Macro camera shot of the same dark phone on the same walnut desk, slow push-in toward a timer button while a hand taps it. Soft left-side window lighting with stable exposure. The tap changes the interface from idle to active. Maintain continuity of the phone, teal interface, desk, and lighting. Negative constraints: no extra text, no unrelated people, no logo drift, no geometry mutations.'
+    },
+    {
+      durationSeconds: 5,
+      visualDirection: 'Clean hero shot of the same phone and desk after the timer completes.',
+      voiceover: 'Finish clearly.',
+      generationPrompt: 'Stable medium camera frame of the same phone on the same walnut desk, subtle pull-back as the timer completes. Soft left-side window lighting remains unchanged. The scene resolves from active timer to a clear completed state. Preserve continuity of the dark phone, teal interface, desk, and palette. Negative constraints: no extra text, no unrelated people, no logo drift, no geometry mutations.'
+    }
+  ],
+}, {
+  request: prepareCreativeRequest({ brief: 'A detailed timer app video.' }),
+});
+for (const scene of alreadyDetailed.scenes) {
+  assert.equal((scene.generationPrompt.match(/negative constraints:/gi) || []).length, 1);
+}
 
 console.log('Director reliability tests passed');

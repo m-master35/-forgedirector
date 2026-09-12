@@ -85,7 +85,7 @@ const RISKY_CLAIM_PATTERNS = [
   /\b(?:guaranteed?|risk[- ]?free|zero risk|no risk)\b/i,
   /\b(?:number one|#1|best|safest|strongest|fastest|superior to|better than)\b/i,
   /\b(?:cure|cures|cured|treat|treats|treated|prevent|prevents|heal|heals|reverse|reverses)\b/i,
-  /\b(?:boost|boosts|improve|improves|enhance|enhances|increase|increases|sharpen|sharpens|support|supports|promote|promotes|reduce|reduces|relieve|relieves|eliminate|eliminates)\b[^.!?]{0,70}\b(?:focus|energy|sleep|stress|anxiety|pain|mood|memory|performance|productivity|immunity|digestion|recovery|testosterone|blood pressure|cholesterol|weight|fat|returns?|profit|income|wealth|savings?)\b/i,
+  /\b(?:boost(?:s|ed|ing)?|improv(?:e|es|ed|ing)|enhanc(?:e|es|ed|ing)|increas(?:e|es|ed|ing)|sharpen(?:s|ed|ing)?|support(?:s|ed|ing)?|promot(?:e|es|ed|ing)|reduc(?:e|es|ed|ing)|reliev(?:e|es|ed|ing)|eliminat(?:e|es|ed|ing))\b[^.!?]{0,70}\b(?:focus|energy|sleep|stress|anxiety|pain|mood|memory|performance|productivity|immunity|digestion|recovery|testosterone|blood pressure|cholesterol|weight|fat|returns?|profit|income|wealth|savings?)\b/i,
   /\b(?:double|triple|multiply|maximi[sz]e)\b[^.!?]{0,50}\b(?:money|returns?|profit|income|wealth|performance|results?)\b/i,
   /\b(?:unlock|reach)\s+(?:your\s+)?(?:full\s+)?potential\b/i,
   /\bwork\s+smarter(?:,?\s+not\s+harder)?\b/i,

@@ -362,6 +362,25 @@ components:
               description: True when ForgeDirector reran analysis because the first model response did not demonstrate full-duration coverage.
             fallbackModelUsed:
               type: boolean
+            complianceVerificationUsed:
+              type: boolean
+              description: True when explicit production requirements triggered a separate context-blind visual compliance pass.
+            complianceVerificationRetryUsed:
+              type: boolean
+              description: True when the blind verifier required recovery or an alternate model.
+            complianceVerificationModelId:
+              type: string
+              nullable: true
+              description: Bedrock model used for the authoritative blind compliance verification.
+            complianceVerificationUsage:
+              type: object
+              nullable: true
+              additionalProperties: true
+            complianceVerificationCoverage:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: Independent full-duration coverage evidence from the blind compliance pass.
             asset:
               type: object
               additionalProperties: true

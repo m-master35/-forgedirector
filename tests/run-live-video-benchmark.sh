@@ -66,6 +66,18 @@ normalize_public_ai_video "veo-professor-class" "https://github.com/user-attachm
 normalize_public_ai_video "veo-koala-dance" "https://github.com/user-attachments/assets/fbdb0cc3-38d2-4a7d-8577-50c737b213e9"
 normalize_public_ai_video "veo-rap-battle" "https://github.com/user-attachments/assets/a7971f81-cce6-41bc-83c3-0591443ef40f"
 
+# Real generated commercial product videos from coleam00/ai-content-factory.
+# The repository documents these as generated UGC/product ads and commits the MP4s.
+normalize_public_ai_video "camber-tumbler-ugc" "https://raw.githubusercontent.com/coleam00/ai-content-factory/main/sample-videos/camber-tumbler-ugc-10s.mp4"
+normalize_public_ai_video "camber-mug-ugc" "https://raw.githubusercontent.com/coleam00/ai-content-factory/main/sample-videos/camber-mug-ugc-10s.mp4"
+normalize_public_ai_video "camber-grinder-ugc" "https://raw.githubusercontent.com/coleam00/ai-content-factory/main/sample-videos/camber-grinder-ugc-10s.mp4"
+normalize_public_ai_video "camber-kettle-ugc" "https://raw.githubusercontent.com/coleam00/ai-content-factory/main/sample-videos/camber-kettle-ugc-10s.mp4"
+normalize_public_ai_video "camber-tumbler-pan" "https://raw.githubusercontent.com/coleam00/ai-content-factory/main/sample-videos/camber-tumbler-pan-10s.mp4"
+
+# Real Veo-rendered shot from arjungithu53/zeroshot_studio. Its committed
+# shotlist describes a cosmetic-balm jar reveal ending on three premium jars.
+normalize_public_ai_video "veo-cosmetic-jars" "https://raw.githubusercontent.com/arjungithu53/zeroshot_studio/main/sample-output/shot_3.3.1_sample_clip.mp4"
+
 cat > "$OUT/expectations.json" <<'JSON'
 {
   "cases": [
@@ -230,6 +242,54 @@ cat > "$OUT/expectations.json" <<'JSON'
         {"type": "mustShow", "rule": "scientific equations or science-themed stage graphics", "status": "pass"}
       ],
       "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "camber-tumbler-ugc",
+      "checks": [
+        {"type": "mustShow", "rule": "black insulated travel tumbler or coffee tumbler", "status": "pass"},
+        {"type": "mustShow", "rule": "person presenting or reviewing the product", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "camber-mug-ugc",
+      "checks": [
+        {"type": "mustShow", "rule": "ceramic coffee mug", "status": "pass"},
+        {"type": "mustShow", "rule": "person presenting or reviewing the product", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "camber-grinder-ugc",
+      "checks": [
+        {"type": "mustShow", "rule": "manual hand coffee grinder", "status": "pass"},
+        {"type": "mustShow", "rule": "person presenting or reviewing the product", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "camber-kettle-ugc",
+      "checks": [
+        {"type": "mustShow", "rule": "gooseneck pour-over kettle", "status": "pass"},
+        {"type": "mustShow", "rule": "person presenting or reviewing the product", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "camber-tumbler-pan",
+      "checks": [
+        {"type": "mustShow", "rule": "black insulated travel tumbler or coffee tumbler", "status": "pass"},
+        {"type": "mustNotShow", "rule": "giraffe", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-cosmetic-jars",
+      "checks": [
+        {"type": "mustShow", "rule": "cosmetic balm jar or cosmetic jars", "status": "pass"},
+        {"type": "mustNotShow", "rule": "motorcycle", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
     }
   ],
   "relational": [
@@ -293,5 +353,11 @@ analyze_case "veo-asmr-keyboard" "$VID/veo-asmr-keyboard.mp4" '{"platform":"Gene
 analyze_case "veo-professor-class" "$VID/veo-professor-class.mp4" '{"platform":"General","objective":"education","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["teacher or professor in a classroom"],"mustNotShow":["motorcycle"]}}'
 analyze_case "veo-koala-dance" "$VID/veo-koala-dance.mp4" '{"platform":"General","objective":"engagement","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["two koalas","dance stage or dance battle"]}}'
 analyze_case "veo-rap-battle" "$VID/veo-rap-battle.mp4" '{"platform":"General","objective":"engagement","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["two people performing on a stage","scientific equations or science-themed stage graphics"]}}'
+analyze_case "camber-tumbler-ugc" "$VID/camber-tumbler-ugc.mp4" '{"platform":"Instagram Reels","objective":"conversion","context":"Real generated UGC product ad from coleam00/ai-content-factory. Repository metadata describes a person reviewing a matte-black insulated coffee tumbler. Audio has been removed; verify visual facts only.","requirements":{"mustShow":["black insulated travel tumbler or coffee tumbler","person presenting or reviewing the product"]}}'
+analyze_case "camber-mug-ugc" "$VID/camber-mug-ugc.mp4" '{"platform":"Instagram Reels","objective":"conversion","context":"Real generated UGC product ad from coleam00/ai-content-factory. Repository metadata describes a person reviewing a warm oat-cream ceramic coffee mug. Audio has been removed; verify visual facts only.","requirements":{"mustShow":["ceramic coffee mug","person presenting or reviewing the product"]}}'
+analyze_case "camber-grinder-ugc" "$VID/camber-grinder-ugc.mp4" '{"platform":"Instagram Reels","objective":"conversion","context":"Real generated UGC product ad from coleam00/ai-content-factory. Repository metadata describes a person reviewing a dark-grey manual hand coffee grinder. Audio has been removed; verify visual facts only.","requirements":{"mustShow":["manual hand coffee grinder","person presenting or reviewing the product"]}}'
+analyze_case "camber-kettle-ugc" "$VID/camber-kettle-ugc.mp4" '{"platform":"Instagram Reels","objective":"conversion","context":"Real generated UGC product ad from coleam00/ai-content-factory. Repository metadata describes a person reviewing a matte-black gooseneck pour-over kettle. Audio has been removed; verify visual facts only.","requirements":{"mustShow":["gooseneck pour-over kettle","person presenting or reviewing the product"]}}'
+analyze_case "camber-tumbler-pan" "$VID/camber-tumbler-pan.mp4" '{"platform":"Instagram Reels","objective":"awareness","context":"Real generated product-pan ad from coleam00/ai-content-factory. Repository metadata describes a cinematic push-in over a Camber tumbler. Audio has been removed; verify visual facts only.","requirements":{"mustShow":["black insulated travel tumbler or coffee tumbler"],"mustNotShow":["giraffe"]}}'
+analyze_case "veo-cosmetic-jars" "$VID/veo-cosmetic-jars.mp4" '{"platform":"General","objective":"awareness","context":"Real Veo-rendered commercial shot from arjungithu53/zeroshot_studio. The committed shotlist describes a cosmetic balm jar reveal ending on multiple premium jars. Audio has been removed; verify visual facts only.","requirements":{"mustShow":["cosmetic balm jar or cosmetic jars"],"mustNotShow":["motorcycle"]}}'
 
 python3 tests/grade-live-video-benchmark.py "$OUT"

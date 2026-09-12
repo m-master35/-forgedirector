@@ -338,4 +338,20 @@ for (const scene of alreadyDetailed.scenes) {
   assert.equal((scene.generationPrompt.match(/negative constraints:/gi) || []).length, 1);
 }
 
+const typoPreserved = applyRevisionPreservation(
+  {
+    ...previous,
+    scenes: previous.scenes.map((scene, index) => ({
+      ...scene,
+      visualDirection: index === 1
+        ? 'Scene two is intentionally changed with a clearer timer interaction.'
+        : 'MODEL ACCIDENTALLY CHANGED AN UNTOUCHED SCENE',
+    })),
+  },
+  previous,
+  'mak sceen 2 mor visully clr, keap evrythng els same',
+);
+assert.deepEqual(typoPreserved.scenes[0], previous.scenes[0]);
+assert.notEqual(typoPreserved.scenes[1].visualDirection, previous.scenes[1].visualDirection);
+
 console.log('Director reliability tests passed');

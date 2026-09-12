@@ -320,8 +320,12 @@ analyze_case() {
 
   curl -sS --fail -X PUT -H 'content-type: video/mp4' --upload-file "$file" "$upload_url" >/dev/null
 
-  local request_body result http
-  request_body=$(printf '%s' "$payload" | jq --arg assetId "$asset_id" '. + {assetId:$assetId}')
+  local request_body result http measured_duration
+  measured_duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$file")
+  request_body=$(printf '%s' "$payload" | jq \
+    --arg assetId "$asset_id" \
+    --argjson measuredDuration "$measured_duration" \
+    '. + {assetId:$assetId} | if has("durationSeconds") then . else . + {durationSeconds:$measuredDuration} end')
   result=$(curl -sS -w '\n%{http_code}' -X POST     -H 'content-type: application/json'     -H "x-rapidapi-proxy-secret: $RAPIDAPI_PROXY_SECRET"     --data "$request_body"     "$API_URL/v1/analyze")
   http=$(printf '%s\n' "$result" | tail -n1)
   result=$(printf '%s\n' "$result" | sed '$d')

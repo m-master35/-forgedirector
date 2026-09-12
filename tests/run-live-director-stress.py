@@ -372,9 +372,11 @@ else:
 
 variance_rows = []
 for spec in VARIANCE_CASES:
-    scores = []
+    semantic_scores = []
     qa_scores = []
     signatures = []
+    fallback_count = 0
+    gate_passes = []
     run_errors = []
     for run in range(spec["runs"]):
         status, data = call("/v1/plan", spec["payload"])
@@ -385,8 +387,13 @@ for spec in VARIANCE_CASES:
         meta = data.get("meta") or {}
         creative = (meta.get("creativeQuality") or {}).get("score")
         qa_score = (data.get("qa") or {}).get("score")
-        if creative is not None:
-            scores.append(int(creative))
+        guaranteed = meta.get("guaranteedBlueprintUsed") is True
+        gate = meta.get("qualityGate") or {}
+        gate_passes.append(gate.get("passed") is True)
+        if guaranteed:
+            fallback_count += 1
+        elif creative is not None:
+            semantic_scores.append(int(creative))
         if qa_score is not None:
             qa_scores.append(int(qa_score))
         if status == 200 and data.get("campaign"):
@@ -395,19 +402,23 @@ for spec in VARIANCE_CASES:
     row = {
         "case": spec["name"],
         "runs": spec["runs"],
-        "minCreative": min(scores) if scores else None,
-        "maxCreative": max(scores) if scores else None,
-        "creativeRange": (max(scores) - min(scores)) if scores else None,
+        "minCreative": min(semantic_scores) if semantic_scores else None,
+        "maxCreative": max(semantic_scores) if semantic_scores else None,
+        "creativeRange": (max(semantic_scores) - min(semantic_scores)) if semantic_scores else None,
         "minQa": min(qa_scores) if qa_scores else None,
+        "fallbackRuns": fallback_count,
+        "allGatesPassed": all(gate_passes) and len(gate_passes) == spec["runs"],
         "uniqueOutputs": len(set(signatures)),
         "errors": run_errors,
     }
+    if not row["allGatesPassed"]:
+        run_errors.append("one or more authoritative quality gates failed")
     if row["minCreative"] is not None and row["minCreative"] < 85:
-        run_errors.append(f"minimum semantic creative score below threshold: {row['minCreative']}")
+        run_errors.append(f"minimum semantic-gated creative score below threshold: {row['minCreative']}")
     if row["minQa"] is None or row["minQa"] < 90:
         run_errors.append(f"minimum QA below threshold: {row['minQa']}")
     if row["creativeRange"] is not None and row["creativeRange"] > 15:
-        run_errors.append(f"creative score variance too wide: {row['creativeRange']}")
+        run_errors.append(f"semantic creative score variance too wide: {row['creativeRange']}")
     variance_rows.append(row)
     if run_errors:
         failures.append((spec["name"], run_errors))
@@ -422,10 +433,10 @@ for row in rows:
 
 print()
 print("## Variance cases")
-print("| Case | Runs | Min creative | Max creative | Range | Min QA | Unique outputs |")
-print("|---|---:|---:|---:|---:|---:|---:|")
+print("| Case | Runs | Min semantic | Max semantic | Range | Min QA | Fallback runs | Gates | Unique outputs |")
+print("|---|---:|---:|---:|---:|---:|---:|---|---:|")
 for row in variance_rows:
-    print(f"| {row['case']} | {row['runs']} | {row['minCreative']} | {row['maxCreative']} | {row['creativeRange']} | {row['minQa']} | {row['uniqueOutputs']} |")
+    print(f"| {row['case']} | {row['runs']} | {row['minCreative']} | {row['maxCreative']} | {row['creativeRange']} | {row['minQa']} | {row['fallbackRuns']} | {'pass' if row['allGatesPassed'] else 'FAIL'} | {row['uniqueOutputs']} |")
 
 print()
 if failures:

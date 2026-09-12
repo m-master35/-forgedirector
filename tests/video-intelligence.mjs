@@ -299,7 +299,7 @@ const fullCoverage = assessVideoAnalysisCoverage({
 assert.equal(fullCoverage.fullDurationReviewed, true);
 assert.equal(fullCoverage.coverageRatio, 1);
 
-const normalizedCoverage = normalizeVideoAnalysis({
+const incompleteNormalizedCoverage = normalizeVideoAnalysis({
   scores: {
     hook: 80, pacing: 80, clarity: 80, visualQuality: 80,
     continuity: 80, cta: 80, platformFit: 80, conversionReadiness: 80,
@@ -309,7 +309,42 @@ const normalizedCoverage = normalizeVideoAnalysis({
     { startSeconds: 3, endSeconds: 8.8, purpose: 'demo' },
   ],
 }, { declaredDurationSeconds: 10 });
-assert.equal(normalizedCoverage.coverage.fullDurationReviewed, true);
-assert.ok(normalizedCoverage.coverage.coverageRatio >= 0.85);
+assert.equal(incompleteNormalizedCoverage.coverage.fullDurationReviewed, false);
+assert.equal(incompleteNormalizedCoverage.coverage.requiredCoverageRatio, 0.95);
+
+const nearFullNormalizedCoverage = normalizeVideoAnalysis({
+  scores: {
+    hook: 80, pacing: 80, clarity: 80, visualQuality: 80,
+    continuity: 80, cta: 80, platformFit: 80, conversionReadiness: 80,
+  },
+  timeline: [
+    { startSeconds: 0, endSeconds: 3, purpose: 'hook' },
+    { startSeconds: 3, endSeconds: 7, purpose: 'demo' },
+    { startSeconds: 7, endSeconds: 9.6, purpose: 'payoff' },
+  ],
+}, { declaredDurationSeconds: 10 });
+assert.equal(nearFullNormalizedCoverage.coverage.fullDurationReviewed, true);
+assert.ok(nearFullNormalizedCoverage.coverage.coverageRatio >= 0.95);
+assert.equal(nearFullNormalizedCoverage.coverage.startedAtBeginning, true);
+assert.equal(nearFullNormalizedCoverage.coverage.reachedFinalSegment, true);
+
+const gappedCoverage = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 0, endSeconds: 3 },
+    { startSeconds: 5, endSeconds: 10 },
+  ],
+}, 10);
+assert.equal(gappedCoverage.observedThroughSeconds, 10);
+assert.equal(gappedCoverage.coverageRatio, 0.8);
+assert.equal(gappedCoverage.fullDurationReviewed, false);
+
+const lateStartCoverage = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 1, endSeconds: 5 },
+    { startSeconds: 5, endSeconds: 10 },
+  ],
+}, 10);
+assert.equal(lateStartCoverage.startedAtBeginning, false);
+assert.equal(lateStartCoverage.fullDurationReviewed, false);
 
 console.log('Video intelligence tests passed');

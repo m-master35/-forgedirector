@@ -40,6 +40,9 @@ jobs:
       - name: Run director reliability tests
         run: node tests/director-reliability.mjs
 
+      - name: Run director fuzz tests
+        run: node tests/director-fuzz.mjs
+
       - name: Run video intelligence tests
         run: node tests/video-intelligence.mjs
 
@@ -68,6 +71,7 @@ jobs:
           test -f commercial/listing.md
           test -f tests/video-intelligence.mjs
           test -f tests/director-reliability.mjs
+          test -f tests/director-fuzz.mjs
 
       - name: Sanity-check OpenAPI routes
         run: |

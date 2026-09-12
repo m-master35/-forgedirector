@@ -126,8 +126,13 @@ function assertText(value, field, max = 6000, required = true) {
 }
 
 function assertCampaign(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    const error = new Error('campaign must be a JSON object.');
+  if (
+    !value
+    || typeof value !== 'object'
+    || Array.isArray(value)
+    || Object.keys(value).length === 0
+  ) {
+    const error = new Error('campaign must be a non-empty JSON object.');
     error.statusCode = 400;
     throw error;
   }

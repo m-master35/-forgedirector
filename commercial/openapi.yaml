@@ -47,6 +47,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '502':
           $ref: '#/components/responses/EngineError'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
 
   /v1/analyze:
     post:
@@ -96,8 +98,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Video was received but no reliable visual analysis could be produced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '502':
           $ref: '#/components/responses/EngineError'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
 
   /v1/plan:
     post:
@@ -131,6 +141,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '502':
           $ref: '#/components/responses/EngineError'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
 
   /v1/revise:
     post:
@@ -156,6 +168,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '502':
           $ref: '#/components/responses/EngineError'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
 
   /v1/qa:
     post:
@@ -204,11 +218,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    EngineUnavailable:
+      description: No production-safe result could be produced within the bounded recovery budget
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
     UploadRequest:
       type: object
-      required: [contentType]
+      required: [contentType, sizeBytes]
       properties:
         contentType:
           type: string
@@ -217,7 +237,7 @@ components:
           type: integer
           minimum: 1
           maximum: 31457280
-          description: Optional declared file size. The uploaded object is verified again before analysis.
+          description: Exact upload size in bytes. The presigned PUT is bound to this content length and the uploaded object is verified again before analysis.
 
     UploadResponse:
       type: object

@@ -3,6 +3,7 @@ import {
   assertAssetId,
   buildVideoAnalysisPrompt,
   normalizeVideoAnalysis,
+  assessVideoAnalysisCoverage,
   videoFormatFromContentType,
 } from '../backend/video-intelligence.mjs';
 
@@ -22,6 +23,8 @@ const prompt = buildVideoAnalysisPrompt({
 });
 assert.match(prompt, /TARGET PLATFORM: TikTok/);
 assert.match(prompt, /OBJECTIVE: conversion/);
+assert.match(prompt, /full video from first frame through final frame/i);
+assert.match(prompt, /at least 85% of the declared duration/i);
 
 const normalized = normalizeVideoAnalysis({
   summary: 'A concise product ad.',
@@ -40,7 +43,7 @@ const normalized = normalizeVideoAnalysis({
   regenerationPrompts: [],
 });
 
-assert.equal(normalized.analysisVersion, '1.4');
+assert.equal(normalized.analysisVersion, '1.5');
 assert.equal(normalized.scoringVersion, 'fd-shortform-v5');
 assert.equal(normalized.scoring.objective, 'engagement');
 assert.equal(normalized.scores.overall, 79);
@@ -261,5 +264,35 @@ assert.deepEqual(sanitized.repurpose.tiktok, ['Tighten the first cut']);
 assert.deepEqual(sanitized.repurpose.instagramReels, ['Preserve the 9:16 crop']);
 assert.deepEqual(sanitized.repurpose.youtubeShorts, ['Keep the CTA legible']);
 assert.ok(sanitized.limitations.some((item) => item.includes('Audio was not analyzed')));
+
+const partialCoverage = assessVideoAnalysisCoverage({
+  timeline: [{ startSeconds: 0, endSeconds: 3 }],
+}, 10);
+assert.equal(partialCoverage.fullDurationReviewed, false);
+assert.equal(partialCoverage.coverageRatio, 0.3);
+assert.equal(partialCoverage.minimumTimelineSegments, 2);
+
+const fullCoverage = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 0, endSeconds: 3 },
+    { startSeconds: 3, endSeconds: 7 },
+    { startSeconds: 7, endSeconds: 10 },
+  ],
+}, 10);
+assert.equal(fullCoverage.fullDurationReviewed, true);
+assert.equal(fullCoverage.coverageRatio, 1);
+
+const normalizedCoverage = normalizeVideoAnalysis({
+  scores: {
+    hook: 80, pacing: 80, clarity: 80, visualQuality: 80,
+    continuity: 80, cta: 80, platformFit: 80, conversionReadiness: 80,
+  },
+  timeline: [
+    { startSeconds: 0, endSeconds: 3, purpose: 'hook' },
+    { startSeconds: 3, endSeconds: 8.8, purpose: 'demo' },
+  ],
+}, { declaredDurationSeconds: 10 });
+assert.equal(normalizedCoverage.coverage.fullDurationReviewed, true);
+assert.ok(normalizedCoverage.coverage.coverageRatio >= 0.85);
 
 console.log('Video intelligence tests passed');

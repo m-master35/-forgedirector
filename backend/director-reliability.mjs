@@ -379,7 +379,7 @@ export function buildDeterministicFallbackCampaign({ request, previousCampaign =
   return normalizeCampaignManifest({}, { request, previousCampaign, isRevision });
 }
 
-export function buildDirectorRepairPrompt({ originalMessage, candidate, qa, previousCampaign }) {
+export function buildDirectorRepairPrompt({ originalMessage, candidate, qa, creativeCritic = null, previousCampaign }) {
   return [
     'Repair the campaign manifest below. Return ONLY the full corrected JSON manifest.',
     'Do not explain the repair.',
@@ -400,5 +400,8 @@ export function buildDirectorRepairPrompt({ originalMessage, candidate, qa, prev
     '',
     'AUTOMATED QA:',
     JSON.stringify(qa || null),
+    '',
+    'CREATIVE CRITIC:',
+    JSON.stringify(creativeCritic || null),
   ].join('\n');
 }

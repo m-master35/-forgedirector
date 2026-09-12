@@ -244,7 +244,7 @@ export function buildVideoAnalysisPrompt({
     '',
     'Treat the first three seconds as the hook window only. Inspect the full video from first frame through final frame before producing scores or compliance decisions.',
     declaredDurationSeconds
-      ? `FULL-DURATION COVERAGE REQUIREMENT: timeline entries must collectively cover the clip through approximately ${declaredDurationSeconds} seconds. Include middle and final segments; the last timeline endSeconds should reach at least 85% of the declared duration.`
+      ? `FULL-DURATION COVERAGE REQUIREMENT: timeline entries must collectively cover at least 95% of the clip from the opening through approximately ${declaredDurationSeconds} seconds. Include meaningful opening, middle, and final segments; do not skip large middle sections, and the final timeline endSeconds must reach the last 5% of the declared duration.`
       : 'FULL-DURATION COVERAGE REQUIREMENT: timeline entries must include the opening, meaningful middle changes, and the final visible segment; do not stop analysis at the first three seconds.',
     'Evaluate continuity, CTA, mustNotShow, mustIncludeText, and other production requirements across the entire clip, not just the opening.',
     'Return JSON only.',
@@ -694,33 +694,75 @@ function qualityGate(scores, retentionRisks, fixes, compliance) {
 export function assessVideoAnalysisCoverage(analysis, declaredDurationSeconds = null) {
   const duration = Number(declaredDurationSeconds);
   const timeline = Array.isArray(analysis?.timeline) ? analysis.timeline : [];
-  const endPoints = timeline
-    .map((item) => Number(item?.endSeconds))
-    .filter((value) => Number.isFinite(value) && value >= 0);
-  const observedThroughSeconds = endPoints.length ? Math.max(...endPoints) : 0;
+  const rawIntervals = timeline
+    .map((item) => ({
+      start: Number(item?.startSeconds),
+      end: Number(item?.endSeconds),
+    }))
+    .filter(({ start, end }) => (
+      Number.isFinite(start)
+      && Number.isFinite(end)
+      && start >= 0
+      && end >= start
+    ));
+
+  const observedThroughSeconds = rawIntervals.length
+    ? Math.max(...rawIntervals.map(({ end }) => end))
+    : 0;
 
   if (!Number.isFinite(duration) || duration <= 0) {
     return {
       declaredDurationSeconds: null,
       observedThroughSeconds,
+      coveredSeconds: null,
       coverageRatio: null,
       requiredCoverageRatio: null,
+      startedAtBeginning: null,
+      reachedFinalSegment: null,
       fullDurationReviewed: null,
       timelineSegments: timeline.length,
     };
   }
 
-  const coverageRatio = Math.max(0, Math.min(1, observedThroughSeconds / duration));
+  const intervals = rawIntervals
+    .map(({ start, end }) => ({
+      start: Math.max(0, Math.min(duration, start)),
+      end: Math.max(0, Math.min(duration, end)),
+    }))
+    .filter(({ start, end }) => end > start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const merged = [];
+  for (const interval of intervals) {
+    const previous = merged[merged.length - 1];
+    if (!previous || interval.start > previous.end) {
+      merged.push({ ...interval });
+    } else {
+      previous.end = Math.max(previous.end, interval.end);
+    }
+  }
+
+  const coveredSeconds = merged.reduce((sum, interval) => sum + (interval.end - interval.start), 0);
+  const coverageRatio = Math.max(0, Math.min(1, coveredSeconds / duration));
   const minimumSegments = duration > 12 ? 3 : duration > 6 ? 2 : 1;
-  const requiredCoverageRatio = duration <= 4 ? 0.7 : 0.85;
+  const requiredCoverageRatio = 0.95;
+  const startToleranceSeconds = Math.max(0.15, Math.min(0.5, duration * 0.05));
+  const startedAtBeginning = intervals.length > 0
+    && Math.min(...intervals.map(({ start }) => start)) <= startToleranceSeconds;
+  const reachedFinalSegment = observedThroughSeconds >= duration * 0.95;
   const fullDurationReviewed = coverageRatio >= requiredCoverageRatio
+    && startedAtBeginning
+    && reachedFinalSegment
     && timeline.length >= minimumSegments;
 
   return {
     declaredDurationSeconds: duration,
     observedThroughSeconds: Math.round(observedThroughSeconds * 100) / 100,
+    coveredSeconds: Math.round(coveredSeconds * 100) / 100,
     coverageRatio: Math.round(coverageRatio * 1000) / 1000,
     requiredCoverageRatio,
+    startedAtBeginning,
+    reachedFinalSegment,
     fullDurationReviewed,
     timelineSegments: timeline.length,
     minimumTimelineSegments: minimumSegments,

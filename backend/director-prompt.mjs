@@ -158,6 +158,7 @@ Rules:
 - Do not invent real brand endorsements, awards, reviews, statistics, prices, or guarantees.
 - Make the hook visually specific and immediately readable on mobile.
 - Make the beats visibly different from one another, not three paraphrases of the same shot.
+- continuity must name concrete recurring visual anchors, not merely say "keep continuity." When applicable identify the same device/product/character, exact wardrobe or product color, recurring environment, stable palette/accent color, and lighting direction. For the fallback focus-timer concept, use the same dark smartphone, same tidy/untidy desk world, teal interface accent, and soft left-side window light across connected shots.
 - Prefer physical actions, transformations, reveals, interfaces, objects, and observable states over abstract marketing language.
 - The resolvedBrief must be useful to a professional video director without follow-up questions.
 - Do not include markdown or commentary.`;

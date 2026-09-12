@@ -530,3 +530,71 @@ export function applyRevisionPreservation(candidate, previousCampaign, instructi
     || 'Applied the requested scoped revision while preserving unrelated campaign decisions.';
   return next;
 }
+
+
+export function normalizeBriefEnrichment(value, request = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const subject = cleanText(value.subject, 500)
+    || (request?.rawBrief && !looksLikeNoise(request.rawBrief) ? cleanText(request.rawBrief, 500) : '')
+    || 'a fictional focus timer app';
+  const objective = cleanText(value.objective, 500)
+    || 'create a clear short-form story with an immediate visual hook and a memorable payoff';
+  const audience = cleanText(value.audience, 500)
+    || request?.constraints?.audience
+    || 'broad mobile-first audience';
+  const hook = cleanText(value.hook, 700)
+    || `Open immediately on the most visually distinctive state of ${subject}, framed close enough to understand within two seconds.`;
+
+  let beats = Array.isArray(value.beats)
+    ? value.beats.map((item) => cleanText(item, 700)).filter(Boolean).slice(0, 5)
+    : [];
+  if (beats.length < 3) {
+    beats = [
+      hook,
+      `Show a concrete action, use case, transformation, or observable change involving ${subject}; make this visually distinct from the opening.`,
+      `Resolve on a clean hero/payoff frame for ${subject} with a neutral next step and no unsupported claims.`,
+    ];
+  }
+
+  const visualStyle = cleanText(value.visualStyle, 700)
+    || 'realistic mobile-first commercial imagery with purposeful framing, restrained lighting, clear focal separation, and physically plausible motion';
+  const continuity = cleanText(value.continuity, 700)
+    || 'preserve recurring subject/product identity, palette, props, environment, lighting world, and styling across connected shots';
+  const cta = cleanText(value.cta, 300) || null;
+  const claimBoundaries = Array.isArray(value.claimBoundaries)
+    ? value.claimBoundaries.map((item) => cleanText(item, 400)).filter(Boolean).slice(0, 8)
+    : [];
+
+  const constraints = request?.constraints || {};
+  const resolvedBrief = [
+    `SUBJECT: ${subject}`,
+    `OBJECTIVE: ${objective}`,
+    `AUDIENCE: ${audience}`,
+    `VISUAL HOOK: ${hook}`,
+    'STORY BEATS:',
+    ...beats.map((beat, index) => `${index + 1}. ${beat}`),
+    `VISUAL STYLE: ${visualStyle}`,
+    `CONTINUITY: ${continuity}`,
+    cta ? `CTA: ${cta}` : 'CTA: use a neutral, non-claiming end-frame next step only if appropriate',
+    claimBoundaries.length
+      ? `CLAIM BOUNDARIES: ${claimBoundaries.join('; ')}`
+      : 'CLAIM BOUNDARIES: do not invent measurable, medical, financial, legal, scientific, comparative, guarantee, award, review, or endorsement claims',
+    Object.keys(constraints).length
+      ? `AUTHORITATIVE CONSTRAINTS: ${JSON.stringify(constraints)}`
+      : '',
+  ].filter(Boolean).join('\n');
+
+  return {
+    subject,
+    objective,
+    audience,
+    hook,
+    beats,
+    visualStyle,
+    continuity,
+    cta,
+    claimBoundaries,
+    resolvedBrief,
+  };
+}

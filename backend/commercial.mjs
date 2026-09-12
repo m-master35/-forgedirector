@@ -1116,7 +1116,7 @@ function revisionMessage(request) {
 function apiInfo() {
   return {
     name: 'ForgeDirector Video Creative Intelligence API',
-    version: '1.2.0',
+    version: '1.3.0',
     status: 'ok',
     endpoints: {
       upload: 'POST /v1/uploads',

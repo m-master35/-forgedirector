@@ -16,6 +16,7 @@ import {
   buildVideoCompliancePrompt,
   normalizeVideoAnalysis,
   normalizeVideoCompliance,
+  consensusVideoCompliance,
   applyVerifiedVideoCompliance,
   assessVideoAnalysisCoverage,
   assertAssetId,
@@ -1191,8 +1192,11 @@ async function invokeVideoAnalysis({ asset, payload }) {
   let complianceVerificationUsed = false;
   let complianceVerificationRetryUsed = false;
   let complianceVerificationModelId = null;
+  let complianceVerificationModelIds = [];
   let complianceVerificationUsage = null;
   let complianceVerificationCoverage = null;
+  let complianceVerificationAgreement = null;
+  let complianceVerificationConsensusUsed = false;
 
   if (Object.keys(requirements || {}).length > 0) {
     complianceVerificationUsed = true;
@@ -1232,60 +1236,61 @@ async function invokeVideoAnalysis({ asset, payload }) {
       MODEL_ID,
     ].filter(Boolean))];
 
-    let verifiedCompliance = null;
+    const verificationRecords = [];
     let lastVerifierError = null;
+    const verifierUsageTotals = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    };
 
-    for (let modelIndex = 0; modelIndex < complianceModels.length; modelIndex += 1) {
-      const verifierModelId = complianceModels[modelIndex];
-      if (modelIndex > 0) complianceVerificationRetryUsed = true;
+    const recordVerifierUsage = (result) => {
+      const usage = result?.usage || {};
+      const inputTokens = Number(usage.inputTokens || 0);
+      const outputTokens = Number(usage.outputTokens || 0);
+      const totalTokens = Number(usage.totalTokens || (inputTokens + outputTokens));
+      if (Number.isFinite(inputTokens) && inputTokens > 0) verifierUsageTotals.inputTokens += inputTokens;
+      if (Number.isFinite(outputTokens) && outputTokens > 0) verifierUsageTotals.outputTokens += outputTokens;
+      if (Number.isFinite(totalTokens) && totalTokens > 0) verifierUsageTotals.totalTokens += totalTokens;
+    };
+
+    for (const verifierModelId of complianceModels) {
+      let verifierParsed = null;
+      let verifierResult = null;
 
       try {
-        const verifierResult = await invokeComplianceOnce(verifierModelId, compliancePrompt);
-        const verifierParsed = parseVideoAnalysisModelJson(extractText(verifierResult));
+        verifierResult = await invokeComplianceOnce(verifierModelId, compliancePrompt);
+        recordVerifierUsage(verifierResult);
+        verifierParsed = parseVideoAnalysisModelJson(extractText(verifierResult));
+
         if (!verifierParsed) {
-          lastVerifierError = new Error('Blind compliance verifier returned invalid JSON.');
+          complianceVerificationRetryUsed = true;
+          const recoveryPrompt = `${compliancePrompt}\n\nJSON RECOVERY: Return the required JSON object only. Keep your independently observed compliance verdicts and visual evidence. Do not add markdown or commentary.`;
+          const recoveryResult = await invokeComplianceOnce(verifierModelId, recoveryPrompt);
+          recordVerifierUsage(recoveryResult);
+          verifierParsed = parseVideoAnalysisModelJson(extractText(recoveryResult));
+          verifierResult = recoveryResult;
+        }
+
+        if (!verifierParsed) {
+          lastVerifierError = new Error('Blind compliance verifier returned invalid JSON after one recovery attempt.');
           lastVerifierError.diagnosticCode = 'compliance_verifier_invalid_json';
           continue;
         }
 
-        const verifierCoverage = assessVideoAnalysisCoverage(
-          verifierParsed,
-          declaredDurationSeconds,
-        );
-        if (
-          declaredDurationSeconds
-          && verifierCoverage.fullDurationReviewed !== true
-        ) {
-          complianceVerificationRetryUsed = true;
-          const recoveryPrompt = `${compliancePrompt}\n\nCOVERAGE RECOVERY: Reinspect the entire clip. Your timeline must cover at least 95% contiguously from near 0 seconds through the final 5% before returning compliance results.`;
-          const recoveryResult = await invokeComplianceOnce(verifierModelId, recoveryPrompt);
-          const recoveryParsed = parseVideoAnalysisModelJson(extractText(recoveryResult));
-          if (!recoveryParsed) {
-            lastVerifierError = new Error('Blind compliance verifier recovery returned invalid JSON.');
-            lastVerifierError.diagnosticCode = 'compliance_verifier_recovery_invalid_json';
-            continue;
-          }
-          const recoveryCoverage = assessVideoAnalysisCoverage(
-            recoveryParsed,
-            declaredDurationSeconds,
-          );
-          if (recoveryCoverage.fullDurationReviewed !== true) {
-            lastVerifierError = new Error('Blind compliance verifier did not demonstrate full-duration coverage.');
-            lastVerifierError.diagnosticCode = 'compliance_verifier_incomplete_coverage';
-            continue;
-          }
-          verifiedCompliance = normalizeVideoCompliance(recoveryParsed, requirements);
-          complianceVerificationCoverage = recoveryCoverage;
-          complianceVerificationModelId = verifierModelId;
-          complianceVerificationUsage = recoveryResult?.usage || null;
-        } else {
-          verifiedCompliance = normalizeVideoCompliance(verifierParsed, requirements);
-          complianceVerificationCoverage = verifierCoverage;
-          complianceVerificationModelId = verifierModelId;
-          complianceVerificationUsage = verifierResult?.usage || null;
+        const normalizedCompliance = normalizeVideoCompliance(verifierParsed, requirements);
+        if (!normalizedCompliance) {
+          lastVerifierError = new Error('Blind compliance verifier did not return a usable normalized compliance result.');
+          lastVerifierError.diagnosticCode = 'compliance_verifier_unusable_result';
+          continue;
         }
 
-        if (verifiedCompliance) break;
+        verificationRecords.push({
+          modelId: verifierModelId,
+          compliance: normalizedCompliance,
+          coverage: assessVideoAnalysisCoverage(verifierParsed, declaredDurationSeconds),
+          usage: verifierResult?.usage || null,
+        });
       } catch (error) {
         const name = String(error?.name || error?.Code || '');
         const status = Number(error?.$metadata?.httpStatusCode || 0);
@@ -1308,9 +1313,9 @@ async function invokeVideoAnalysis({ asset, payload }) {
       }
     }
 
-    if (!verifiedCompliance) {
+    if (!verificationRecords.length) {
       const error = new Error(
-        'The video was analyzed, but ForgeDirector could not independently verify the supplied production requirements. No potentially context-influenced compliance verdict was returned.',
+        'The video was analyzed, but ForgeDirector could not obtain any usable independent compliance verification. No potentially context-influenced compliance verdict was returned.',
       );
       error.statusCode = 422;
       error.diagnosticCode = lastVerifierError?.diagnosticCode || 'compliance_verifier_unresolved';
@@ -1318,7 +1323,28 @@ async function invokeVideoAnalysis({ asset, payload }) {
       throw error;
     }
 
-    analysis = applyVerifiedVideoCompliance(analysis, verifiedCompliance);
+    const consensus = consensusVideoCompliance(
+      verificationRecords.map((record) => record.compliance),
+      requirements,
+    );
+
+    complianceVerificationConsensusUsed = verificationRecords.length > 1;
+    complianceVerificationAgreement = consensus.agreement;
+    complianceVerificationModelIds = verificationRecords.map((record) => record.modelId);
+    complianceVerificationModelId = complianceVerificationModelIds[0] || null;
+    complianceVerificationUsage = verifierUsageTotals.totalTokens > 0
+      ? verifierUsageTotals
+      : null;
+
+    const coverageCandidates = verificationRecords
+      .map((record) => record.coverage)
+      .filter(Boolean)
+      .sort((a, b) => (
+        Number(b?.coverageRatio || 0) - Number(a?.coverageRatio || 0)
+      ));
+    complianceVerificationCoverage = coverageCandidates[0] || null;
+
+    analysis = applyVerifiedVideoCompliance(analysis, consensus.compliance);
   }
 
   return {
@@ -1334,8 +1360,11 @@ async function invokeVideoAnalysis({ asset, payload }) {
     complianceVerificationUsed,
     complianceVerificationRetryUsed,
     complianceVerificationModelId,
+    complianceVerificationModelIds,
     complianceVerificationUsage,
     complianceVerificationCoverage,
+    complianceVerificationAgreement,
+    complianceVerificationConsensusUsed,
   };
 }
 
@@ -1443,8 +1472,11 @@ export const handler = async (event) => {
             complianceVerificationUsed: result.complianceVerificationUsed,
             complianceVerificationRetryUsed: result.complianceVerificationRetryUsed,
             complianceVerificationModelId: result.complianceVerificationModelId,
+            complianceVerificationModelIds: result.complianceVerificationModelIds,
             complianceVerificationUsage: result.complianceVerificationUsage,
             complianceVerificationCoverage: result.complianceVerificationCoverage,
+            complianceVerificationAgreement: result.complianceVerificationAgreement,
+            complianceVerificationConsensusUsed: result.complianceVerificationConsensusUsed,
             asset: {
               id: asset.assetId,
               sizeBytes: asset.sizeBytes,

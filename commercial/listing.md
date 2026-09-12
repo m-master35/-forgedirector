@@ -36,9 +36,11 @@ Scores are creative-quality heuristics, not predictions or guarantees of views, 
 
 ForgeDirector also keeps its production-orchestration layer:
 
-- `/v1/plan` converts a natural-language brief into a structured production manifest.
-- `/v1/revise` updates requested decisions while preserving unrelated campaign state.
+- `/v1/plan` converts a natural-language brief into a structured production manifest, including vague, noisy, or nearly empty briefs through guarded brief recovery.
+- `/v1/revise` updates requested decisions while deterministically preserving unrelated campaign state when the revision is scoped.
 - `/v1/qa` runs deterministic production checks without consuming a model call.
+- Plan/revise responses include an authoritative `meta.qualityGate` so applications can distinguish a normal semantic-critic pass from a validated deterministic recovery result.
+- Model-call escalation is bounded. During retryable model-service degradation ForgeDirector can switch to a validated deterministic production blueprint rather than creating an unbounded retry storm.
 
 This creates a full production loop:
 
@@ -114,7 +116,7 @@ For SaaS products and heavier integrations using ForgeDirector as an automated v
 }
 ```
 
-Upload the video with HTTP PUT to the returned `upload.uploadUrl` using the returned Content-Type header.
+Upload the video with HTTP PUT to the returned `upload.uploadUrl` using the returned Content-Type and Content-Length headers. `sizeBytes` is required and the signed upload is bound to that exact length.
 
 ## Analyze request
 ```json

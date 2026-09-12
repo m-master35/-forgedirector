@@ -28,6 +28,7 @@ jobs:
         run: |
           node --check backend/index.mjs
           node --check backend/director-prompt.mjs
+          node --check backend/director-reliability.mjs
           node --check backend/commercial.mjs
           node --check backend/qa.mjs
           node --check backend/storage.mjs
@@ -35,6 +36,9 @@ jobs:
 
       - name: Run commercial QA tests
         run: node tests/commercial-qa.mjs
+
+      - name: Run director reliability tests
+        run: node tests/director-reliability.mjs
 
       - name: Run video intelligence tests
         run: node tests/video-intelligence.mjs
@@ -53,6 +57,7 @@ jobs:
           test -f backend/package.json
           test -f backend/index.mjs
           test -f backend/director-prompt.mjs
+          test -f backend/director-reliability.mjs
           test -f backend/commercial.mjs
           test -f backend/qa.mjs
           test -f backend/storage.mjs
@@ -62,6 +67,7 @@ jobs:
           test -f commercial/pricing.md
           test -f commercial/listing.md
           test -f tests/video-intelligence.mjs
+          test -f tests/director-reliability.mjs
 
       - name: Sanity-check OpenAPI routes
         run: |

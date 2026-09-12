@@ -7,6 +7,7 @@ import {
   normalizeCreativeCritique,
   critiqueNeedsRepair,
   applyRevisionPreservation,
+  normalizeBriefEnrichment,
 } from '../backend/director-reliability.mjs';
 import { evaluateCampaign } from '../backend/qa.mjs';
 
@@ -258,5 +259,29 @@ assert.equal(preserved.audience, previous.audience);
 assert.equal(preserved.platform, previous.platform);
 assert.equal(preserved.aspectRatio, previous.aspectRatio);
 assert.deepEqual(preserved.continuity, previous.continuity);
+
+const briefDoctor = normalizeBriefEnrichment({
+  subject: 'a fictional mechanical keyboard',
+  objective: 'show the tactile desk transformation',
+  audience: 'desk-focused professionals',
+  hook: 'Macro keycap snap lands on beat in the first second.',
+  beats: [
+    'Macro keycap snap and switch reveal.',
+    'Hands type while the desk composition becomes ordered.',
+    'Clean keyboard hero frame with neutral next step.'
+  ],
+  visualStyle: 'dark walnut desk, soft directional window light, precise macro detail',
+  continuity: 'same keyboard, keycap colorway, desk and lighting direction throughout',
+  cta: 'Explore the layout',
+  claimBoundaries: ['no speed or productivity claims'],
+}, prepareCreativeRequest({ brief: 'make a keyboard vid' }));
+
+assert.ok(briefDoctor.resolvedBrief.includes('mechanical keyboard'));
+assert.ok(briefDoctor.resolvedBrief.includes('VISUAL HOOK'));
+assert.equal(briefDoctor.beats.length, 3);
+
+const briefDoctorFallback = normalizeBriefEnrichment({}, prepareCreativeRequest({ brief: '' }));
+assert.ok(briefDoctorFallback.resolvedBrief.includes('fictional focus timer app'));
+assert.ok(briefDoctorFallback.beats.length >= 3);
 
 console.log('Director reliability tests passed');

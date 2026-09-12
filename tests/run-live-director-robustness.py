@@ -95,6 +95,17 @@ def assert_campaign(name, status, data):
     if not isinstance(prompt_quality, dict) or "tier" not in prompt_quality:
         errors.append("missing promptQuality meta")
 
+    creative_quality = meta.get("creativeQuality")
+    if not isinstance(creative_quality, dict):
+        errors.append("missing creativeQuality meta")
+    else:
+        if creative_quality.get("passed") is not True:
+            errors.append(f"creativeQuality.passed={creative_quality.get('passed')}")
+        if int(creative_quality.get("score") or 0) < 82:
+            errors.append(f"creativeQuality.score={creative_quality.get('score')}")
+        if creative_quality.get("blockingIssues"):
+            errors.append(f"creative blockers={creative_quality.get('blockingIssues')}")
+
     return errors
 
 rows = []
@@ -113,6 +124,7 @@ for name, payload in CASES:
         "status": status,
         "score": qa.get("score"),
         "promptTier": (meta.get("promptQuality") or {}).get("tier"),
+        "creative": (meta.get("creativeQuality") or {}).get("score"),
         "repair": meta.get("automaticRepairUsed"),
         "degraded": meta.get("degradedFallbackUsed"),
         "seconds": elapsed,
@@ -144,6 +156,7 @@ if baseline:
             "status": status,
             "score": qa.get("score"),
             "promptTier": (meta.get("promptQuality") or {}).get("tier"),
+            "creative": (meta.get("creativeQuality") or {}).get("score"),
             "repair": meta.get("automaticRepairUsed"),
             "degraded": meta.get("degradedFallbackUsed"),
             "seconds": elapsed,
@@ -156,12 +169,13 @@ else:
 
 print("# ForgeDirector live director robustness benchmark")
 print()
-print("| Case | HTTP | QA | Prompt | Repair | Degraded | Seconds |")
-print("|---|---:|---:|---|---|---|---:|")
+print("| Case | HTTP | QA | Creative | Prompt | Repair | Degraded | Seconds |")
+print("|---|---:|---:|---:|---|---|---|---:|")
 for row in rows:
     print(
         f"| {row['case']} | {row['status']} | {row['score'] if row['score'] is not None else '-'} "
-        f"| {row['promptTier'] or '-'} | {str(row['repair']).lower()} | {str(row['degraded']).lower()} "
+        f"| {row.get('creative') if row.get('creative') is not None else '-'} | {row['promptTier'] or '-'} "
+        f"| {str(row['repair']).lower()} | {str(row['degraded']).lower()} "
         f"| {row['seconds']} |"
     )
 

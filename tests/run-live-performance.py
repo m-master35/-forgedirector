@@ -36,11 +36,14 @@ def call(payload):
         return {"status":0,"seconds":round(time.time()-start,2),"error":str(e)}
     elapsed=round(time.time()-start,2)
     meta=data.get("meta") or {}
+    gate=meta.get("qualityGate") or {}
     return {
       "status":status,
       "seconds":elapsed,
       "qa":(data.get("qa") or {}).get("score"),
       "creative":(meta.get("creativeQuality") or {}).get("score"),
+      "qualityGatePassed":gate.get("passed"),
+      "qualityGateMethod":gate.get("method"),
       "repair":meta.get("automaticRepairUsed"),
       "rescue":meta.get("rescueRewriteUsed"),
       "tournament":meta.get("candidateTournamentUsed"),
@@ -92,8 +95,10 @@ for label,rows in groups:
             failures.append(f"{label} call {idx} HTTP {row.get('status')}")
         elif (row.get("qa") or 0)<90:
             failures.append(f"{label} call {idx} QA {row.get('qa')}")
-        elif row.get("creative") is not None and row["creative"]<85:
-            failures.append(f"{label} call {idx} creative {row['creative']}")
+        elif row.get("qualityGatePassed") is not True:
+            failures.append(f"{label} call {idx} authoritative quality gate failed: {row.get('qualityGateMethod')}")
+        elif not row.get("guaranteed") and (row.get("creative") is None or row["creative"]<85):
+            failures.append(f"{label} call {idx} semantic creative score {row.get('creative')}")
 
 normal=next(x for x in summaries if x["label"]=="normal-sequential")
 concurrent=next(x for x in summaries if x["label"]=="mixed-concurrent-8")

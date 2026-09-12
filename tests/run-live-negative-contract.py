@@ -121,6 +121,56 @@ else:
     failures.append(f"rejected-analysis-cleans-upload: could not create upload, HTTP {status} {upload}")
 
 
+
+# Prove that the presigned PUT is bound to the declared Content-Length.
+declared_payload=b"1234567890"
+status,mismatch_upload=request("/v1/uploads",{
+    "contentType":"video/mp4",
+    "sizeBytes":len(declared_payload),
+})
+if status==200:
+    upload_url=mismatch_upload.get("upload",{}).get("uploadUrl")
+    asset_id=mismatch_upload.get("upload",{}).get("assetId")
+    oversized_payload=declared_payload+b"X"
+    put_status=0
+    try:
+        put_req=urllib.request.Request(
+            upload_url,
+            data=oversized_payload,
+            headers={
+                "content-type":"video/mp4",
+                "content-length":str(len(oversized_payload)),
+            },
+            method="PUT",
+        )
+        with urllib.request.urlopen(put_req,timeout=30) as put_resp:
+            put_status=put_resp.status
+    except urllib.error.HTTPError as e:
+        put_status=e.code
+    except Exception:
+        put_status=0
+
+    analyze_status,analyze_body=request("/v1/analyze",{"assetId":asset_id})
+    size_lock_ok=(put_status not in (200,201,204) and analyze_status==404)
+    rows.append((
+        "presigned-upload-rejects-size-mismatch",
+        analyze_status if size_lock_ok else put_status,
+        404,
+        "mismatched PUT rejected and no object accepted" if size_lock_ok else str({
+            "put":put_status,
+            "analyze":analyze_status,
+        }),
+        analyze_body.get("requestId") if isinstance(analyze_body,dict) else None,
+        size_lock_ok,
+    ))
+    if not size_lock_ok:
+        failures.append(
+            f"presigned-upload-rejects-size-mismatch: put={put_status}, analyze={analyze_status}"
+        )
+else:
+    failures.append(f"presigned-upload-rejects-size-mismatch: could not create upload, HTTP {status} {mismatch_upload}")
+
+
 # Method mismatch should be a clean 404 JSON error as well.
 status,data=request("/v1/plan",None,method="GET",auth=True)
 ok=status==404 and bool(data.get("error")) and bool(data.get("requestId"))

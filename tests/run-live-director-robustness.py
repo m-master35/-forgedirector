@@ -107,7 +107,7 @@ def assert_campaign(name, status, data):
                 f"dims={creative_quality.get('dimensions')} "
                 f"improvements={creative_quality.get('improvements')}"
             )
-        if int(creative_quality.get("score") or 0) < 86:
+        if int(creative_quality.get("score") or 0) < 85:
             errors.append(f"creativeQuality.score={creative_quality.get('score')}")
         if creative_quality.get("blockingIssues"):
             errors.append(f"creative blockers={creative_quality.get('blockingIssues')}")

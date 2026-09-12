@@ -103,6 +103,9 @@ Important rules:
 - If context is absent, keep fixes structurally specific but subject-matter neutral.
 - If spoken content cannot be reliably determined from the video input and no transcript is supplied, set speech-dependent fields to null or explain the limitation.
 - Give precise timestamps when reasonably observable; otherwise use your best approximate timestamp and mark it approximate.
+- The first three seconds are ONLY the hook window. You must inspect the entire supplied video through its final visible frame before scoring continuity, CTA, pacing, compliance, or overall quality.
+- The timeline must cover the full video in chronological segments. For videos longer than 6 seconds, do not return only a 0-3 second timeline. Include later/middle/end segments and make the final timeline endSeconds reach the end of the visible clip (or the declared duration when supplied).
+- A production requirement can appear or fail at any time in the clip. Never mark mustNotShow, continuity, CTA, or required-text checks from the opening frames alone.
 - Numeric scores must agree with qualitative verdicts: strong should normally be 70-100, mixed 35-69, and weak 0-45.
 - If PRODUCTION REQUIREMENTS are supplied, evaluate every supplied rule. Never silently omit a rule. Mark a rule uncertain when the video does not provide enough evidence.
 - Prioritize actionable corrections that an editor, video-generation model, or automation system can execute.
@@ -231,7 +234,11 @@ export function buildVideoAnalysisPrompt({
       ? `PRODUCTION REQUIREMENTS:\n${JSON.stringify(safeRequirements)}`
       : 'PRODUCTION REQUIREMENTS: none',
     '',
-    'Focus on the first three seconds, pacing, clarity, visual execution, continuity, CTA, platform fit, retention risks, exact corrective actions, and any supplied production requirements.',
+    'Treat the first three seconds as the hook window only. Inspect the full video from first frame through final frame before producing scores or compliance decisions.',
+    declaredDurationSeconds
+      ? `FULL-DURATION COVERAGE REQUIREMENT: timeline entries must collectively cover the clip through approximately ${declaredDurationSeconds} seconds. Include middle and final segments; the last timeline endSeconds should reach at least 85% of the declared duration.`
+      : 'FULL-DURATION COVERAGE REQUIREMENT: timeline entries must include the opening, meaningful middle changes, and the final visible segment; do not stop analysis at the first three seconds.',
+    'Evaluate continuity, CTA, mustNotShow, mustIncludeText, and other production requirements across the entire clip, not just the opening.',
     'Return JSON only.',
   ].filter(Boolean).join('\n');
 }
@@ -675,6 +682,43 @@ function qualityGate(scores, retentionRisks, fixes, compliance) {
   };
 }
 
+
+export function assessVideoAnalysisCoverage(analysis, declaredDurationSeconds = null) {
+  const duration = Number(declaredDurationSeconds);
+  const timeline = Array.isArray(analysis?.timeline) ? analysis.timeline : [];
+  const endPoints = timeline
+    .map((item) => Number(item?.endSeconds))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  const observedThroughSeconds = endPoints.length ? Math.max(...endPoints) : 0;
+
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return {
+      declaredDurationSeconds: null,
+      observedThroughSeconds,
+      coverageRatio: null,
+      requiredCoverageRatio: null,
+      fullDurationReviewed: null,
+      timelineSegments: timeline.length,
+    };
+  }
+
+  const coverageRatio = Math.max(0, Math.min(1, observedThroughSeconds / duration));
+  const minimumSegments = duration > 12 ? 3 : duration > 6 ? 2 : 1;
+  const requiredCoverageRatio = duration <= 4 ? 0.7 : 0.85;
+  const fullDurationReviewed = coverageRatio >= requiredCoverageRatio
+    && timeline.length >= minimumSegments;
+
+  return {
+    declaredDurationSeconds: duration,
+    observedThroughSeconds: Math.round(observedThroughSeconds * 100) / 100,
+    coverageRatio: Math.round(coverageRatio * 1000) / 1000,
+    requiredCoverageRatio,
+    fullDurationReviewed,
+    timelineSegments: timeline.length,
+    minimumTimelineSegments: minimumSegments,
+  };
+}
+
 export function normalizeVideoAnalysis(value, {
   objective = 'engagement',
   requirements = {},
@@ -711,7 +755,7 @@ export function normalizeVideoAnalysis(value, {
   }
 
   return {
-    analysisVersion: '1.4',
+    analysisVersion: '1.5',
     scoringVersion: 'fd-shortform-v5',
     scoring: {
       objective: normalizedObjective,
@@ -724,6 +768,7 @@ export function normalizeVideoAnalysis(value, {
     qualityGate: qualityGate(scores, retentionRisks, fixes, compliance),
     hook: normalizeHook(value.hook, hasTranscript),
     timeline,
+    coverage: assessVideoAnalysisCoverage({ timeline }, null),
     retentionRisks,
     continuity: value.continuity && typeof value.continuity === 'object' ? value.continuity : {},
     cta: value.cta && typeof value.cta === 'object' ? value.cta : {},

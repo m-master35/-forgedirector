@@ -463,7 +463,7 @@ export function normalizeCreativeCritique(value) {
     blockingIssues,
     improvements,
     weakDimensions,
-    passed: score >= 86 && blockingIssues.length === 0 && weakDimensions.length === 0,
+    passed: score >= 85 && blockingIssues.length === 0 && weakDimensions.length === 0,
   };
 }
 

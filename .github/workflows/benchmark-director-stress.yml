@@ -1,0 +1,57 @@
+name: Benchmark Director Stress
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/benchmark-director-stress.yml
+      - tests/run-live-director-stress.py
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: forgedirector-director-stress
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorStressBenchmark
+          mask-aws-account-id: true
+
+      - name: Resolve live API URL
+        id: api
+        run: |
+          API_URL=$(aws cloudformation describe-stacks             --stack-name forgedirector-commercial             --region "$AWS_REGION"             --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue"             --output text)
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Run adversarial and variance benchmark
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: python tests/run-live-director-stress.py
+
+      - name: Add stress summary
+        if: always()
+        run: |
+          if [ -f /tmp/director-stress-summary.md ]; then
+            cat /tmp/director-stress-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -24,7 +24,7 @@ const prompt = buildVideoAnalysisPrompt({
 assert.match(prompt, /TARGET PLATFORM: TikTok/);
 assert.match(prompt, /OBJECTIVE: conversion/);
 assert.match(prompt, /full video from first frame through final frame/i);
-assert.match(prompt, /at least 85% of the declared duration/i);
+assert.match(prompt, /at least 95% of the clip/i);
 
 const injectionPrompt = buildVideoAnalysisPrompt({
   platform: 'TikTok',

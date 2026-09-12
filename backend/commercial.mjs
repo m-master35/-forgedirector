@@ -411,6 +411,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     : MODEL_ID;
 
   let result;
+  let forcedFallbackCampaign = null;
   let usedModelId = preferredModel;
   let degradedFallbackUsed = false;
 
@@ -422,39 +423,29 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       try {
         result = await sendDirector(usedModelId, message);
       } catch {
-        const fallbackCampaign = buildDeterministicFallbackCampaign({
+        degradedFallbackUsed = true;
+        usedModelId = null;
+        result = null;
+        forcedFallbackCampaign = buildDeterministicFallbackCampaign({
           request,
           previousCampaign: campaign,
           isRevision,
         });
-        return {
-          campaign: validateManifest(fallbackCampaign),
-          usage: null,
-          repairUsed: false,
-          degradedFallbackUsed: true,
-          modelId: null,
-          initialQa: evaluateCampaign(fallbackCampaign),
-        };
       }
     } else {
-      const fallbackCampaign = buildDeterministicFallbackCampaign({
+      degradedFallbackUsed = true;
+      usedModelId = null;
+      result = null;
+      forcedFallbackCampaign = buildDeterministicFallbackCampaign({
         request,
         previousCampaign: campaign,
         isRevision,
       });
-      return {
-        campaign: validateManifest(fallbackCampaign),
-        usage: null,
-        repairUsed: false,
-        degradedFallbackUsed: true,
-        modelId: null,
-        initialQa: evaluateCampaign(fallbackCampaign),
-      };
     }
   }
 
-  let parsed = parseDirectorJson(extractText(result));
-  let normalized = normalizeCampaignManifest(parsed, {
+  let parsed = result ? parseDirectorJson(extractText(result)) : null;
+  let normalized = forcedFallbackCampaign || normalizeCampaignManifest(parsed, {
     request,
     previousCampaign: campaign,
     isRevision,
@@ -668,6 +659,56 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
+  let deterministicQualityFallbackUsed = false;
+  if (!creativeCritique || critiqueNeedsRepair(creativeCritique) || !qa.passed || qa.score < 90) {
+    const allowDeterministicFallback = !isRevision || request?.quality?.tier !== 'good';
+    if (allowDeterministicFallback) {
+      deterministicQualityFallbackUsed = true;
+      let fallbackCandidate = buildDeterministicFallbackCampaign({
+        request,
+        previousCampaign: campaign,
+        isRevision,
+      });
+      if (isRevision && campaign) {
+        fallbackCandidate = applyRevisionPreservation(fallbackCandidate, campaign, request?.rawBrief || '');
+      }
+
+      const fallbackQa = evaluateCampaign(fallbackCandidate);
+      let fallbackCritique = null;
+      let fallbackCriticUsage = null;
+      try {
+        const criticResult = await runCreativeCritic(fallbackCandidate);
+        fallbackCritique = criticResult.critique;
+        fallbackCriticUsage = criticResult.usage;
+      } catch {
+        fallbackCritique = null;
+      }
+
+      if (
+        fallbackQa.passed
+        && fallbackQa.score >= 90
+        && fallbackCritique?.passed
+      ) {
+        normalized = fallbackCandidate;
+        qa = fallbackQa;
+        creativeCritique = fallbackCritique;
+        if (fallbackCriticUsage) criticUsage = fallbackCriticUsage;
+        degradedFallbackUsed = true;
+      }
+    }
+  }
+
+  if (
+    !qa.passed
+    || qa.score < 90
+    || !creativeCritique
+    || critiqueNeedsRepair(creativeCritique)
+  ) {
+    const error = new Error('ForgeDirector could not produce a campaign that met the production quality gate. No below-standard campaign was returned.');
+    error.statusCode = 503;
+    throw error;
+  }
+
   try {
     return {
       campaign: validateManifest(normalized),
@@ -676,6 +717,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       rescueRewriteUsed,
       candidateTournamentUsed,
       candidateTournamentAttempts,
+      deterministicQualityFallbackUsed,
       briefEnrichmentUsed,
       briefEnrichment,
       degradedFallbackUsed,
@@ -698,6 +740,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       rescueRewriteUsed,
       candidateTournamentUsed,
       candidateTournamentAttempts,
+      deterministicQualityFallbackUsed,
       briefEnrichmentUsed,
       briefEnrichment,
       degradedFallbackUsed,
@@ -1006,6 +1049,7 @@ export const handler = async (event) => {
           rescueRewriteUsed: result.rescueRewriteUsed,
           candidateTournamentUsed: result.candidateTournamentUsed,
           candidateTournamentAttempts: result.candidateTournamentAttempts,
+          deterministicQualityFallbackUsed: result.deterministicQualityFallbackUsed,
           briefEnrichmentUsed: result.briefEnrichmentUsed,
           briefEnrichment: result.briefEnrichment,
           degradedFallbackUsed: result.degradedFallbackUsed,
@@ -1049,6 +1093,7 @@ export const handler = async (event) => {
           rescueRewriteUsed: result.rescueRewriteUsed,
           candidateTournamentUsed: result.candidateTournamentUsed,
           candidateTournamentAttempts: result.candidateTournamentAttempts,
+          deterministicQualityFallbackUsed: result.deterministicQualityFallbackUsed,
           briefEnrichmentUsed: result.briefEnrichmentUsed,
           briefEnrichment: result.briefEnrichment,
           degradedFallbackUsed: result.degradedFallbackUsed,

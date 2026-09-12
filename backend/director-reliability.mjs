@@ -307,7 +307,7 @@ export function normalizeCampaignManifest(candidate, {
     : {};
   const previous = previousCampaign && typeof previousCampaign === 'object' ? previousCampaign : null;
   const constraints = request.constraints || {};
-  const brief = request.rawBrief || request.enrichedBrief || 'A polished short-form video.';
+  const brief = request.enrichedBrief || request.rawBrief || 'A polished short-form video.';
 
   const platform = normalizePlatform(
     source.platform,

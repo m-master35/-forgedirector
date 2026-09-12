@@ -408,4 +408,13 @@ assert.deepEqual(guaranteedRevision.scenes, previous.scenes);
 assert.equal(evaluateCampaign(guaranteedRevision).passed, true);
 assert.ok(evaluateCampaign(guaranteedRevision).score >= 90);
 
+const longNormalRequest = prepareCreativeRequest({
+  brief: 'Create a 15-second vertical product story for a fictional focus timer app: distracted desk, timer starts, focused work, clean app end frame. No invented performance claims.',
+  constraints: { durationSeconds: 15, platform: 'Instagram Reels', aspectRatio: '9:16' },
+});
+const longNormalFallbackEnrichment = normalizeBriefEnrichment({}, longNormalRequest);
+assert.ok(longNormalFallbackEnrichment.subject.length < 130);
+assert.notEqual(longNormalFallbackEnrichment.subject, longNormalRequest.rawBrief);
+assert.ok(!longNormalFallbackEnrichment.resolvedBrief.includes(longNormalRequest.rawBrief.repeat(2)));
+
 console.log('Director reliability tests passed');

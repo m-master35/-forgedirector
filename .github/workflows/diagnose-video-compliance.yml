@@ -1,0 +1,57 @@
+name: Diagnose Video Compliance Verifier
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/diagnose-video-compliance.yml
+      - tests/run-live-compliance-diagnostics.py
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorComplianceDiagnostics
+          mask-aws-account-id: true
+      - name: Resolve API URL
+        id: api
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name forgedirector-commercial --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue" --output text)
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Run verifier diagnostics
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: python tests/run-live-compliance-diagnostics.py
+      - name: Add summary
+        if: always()
+        run: |
+          if [ -f /tmp/compliance-verifier-diagnostics.md ]; then cat /tmp/compliance-verifier-diagnostics.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgedirector-compliance-verifier-diagnostics
+          path: |
+            /tmp/compliance-verifier-diagnostics.json
+            /tmp/compliance-verifier-diagnostics.md
+          if-no-files-found: warn

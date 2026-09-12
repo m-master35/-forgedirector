@@ -79,7 +79,7 @@ export function prepareCreativeRequest(payload = {}) {
   const assumptions = [];
 
   if (!rawBrief) issues.push('missing_brief');
-  if (rawBrief && rawBrief.length < 12) issues.push('very_short_brief');
+  if (rawBrief && rawBrief.length < 20) issues.push('very_short_brief');
   if (rawBrief && meaningfulWordCount(rawBrief) < 2) issues.push('underspecified_brief');
   if (rawBrief && looksLikeNoise(rawBrief)) issues.push('noisy_brief');
 

@@ -185,6 +185,27 @@ if mismatch_count == 0:
 (root / "summary.md").write_text("\n".join(md) + "\n")
 print("\n".join(md))
 
-# This is an evidence run, not a deploy gate. Only technical failures make the workflow fail.
+release_failures = []
 if technical_failures:
+    release_failures.extend(technical_failures)
+if check_total and check_correct != check_total:
+    release_failures.append(f"compliance accuracy {check_correct}/{check_total}")
+if speech_total and speech_clean != speech_total:
+    release_failures.append(f"speech-hallucination cleanliness {speech_clean}/{speech_total}")
+if gate_assertions and gate_correct != len(gate_assertions):
+    release_failures.append(f"quality-gate assertions {gate_correct}/{len(gate_assertions)}")
+for item in relational:
+    if not item.get("ok"):
+        release_failures.append(
+            f"relational check failed: {item.get('higher')} {item.get('metric')} vs {item.get('lower')}"
+        )
+
+if release_failures:
+    print("\n## RELEASE GATE FAILED")
+    for failure in release_failures:
+        print(f"- {failure}")
     sys.exit(2)
+
+print("\n## RELEASE GATE PASSED")
+print("- All technical, compliance, no-speech, quality-gate, and relational checks passed.")
+sys.exit(0)

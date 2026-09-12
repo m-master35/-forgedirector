@@ -57,3 +57,13 @@ jobs:
           if [ -f /tmp/video-repeatability-summary.md ]; then
             cat /tmp/video-repeatability-summary.md >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Upload repeatability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgedirector-video-repeatability
+          path: |
+            /tmp/video-repeatability-summary.md
+            /tmp/video-repeatability-results.json
+          if-no-files-found: warn

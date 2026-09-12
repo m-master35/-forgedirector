@@ -285,11 +285,10 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   };
 
   const runCreativeCritic = async (candidate) => {
-    const criticModelId = MODEL_ID;
-    if (!criticModelId) return { critique: null, usage: null };
+    if (!MODEL_ID) return { critique: null, usage: null, modelId: null };
 
-    const invokeCriticOnce = async () => client.send(new ConverseCommand({
-      modelId: criticModelId,
+    const invokeCriticOnce = async (modelId) => client.send(new ConverseCommand({
+      modelId,
       system: [{ text: CRITIC_SYSTEM_PROMPT }],
       messages: [{
         role: 'user',
@@ -302,29 +301,51 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       },
     }));
 
-    let criticResult;
+    const attempt = async (modelId) => {
+      let criticResult;
+      try {
+        criticResult = await invokeCriticOnce(modelId);
+      } catch (error) {
+        const name = String(error?.name || error?.Code || '');
+        const status = Number(error?.$metadata?.httpStatusCode || 0);
+        const retryable = new Set([
+          'ThrottlingException',
+          'ServiceUnavailableException',
+          'InternalServerException',
+          'ModelTimeoutException',
+          'ModelNotReadyException',
+        ]);
+        if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        criticResult = await invokeCriticOnce(modelId);
+      }
+
+      const raw = parseDirectorJson(extractText(criticResult));
+      return {
+        critique: normalizeCreativeCritique(raw),
+        usage: criticResult?.usage || null,
+        modelId,
+      };
+    };
+
+    let first;
     try {
-      criticResult = await invokeCriticOnce();
-    } catch (error) {
-      const name = String(error?.name || error?.Code || '');
-      const status = Number(error?.$metadata?.httpStatusCode || 0);
-      const retryable = new Set([
-        'ThrottlingException',
-        'ServiceUnavailableException',
-        'InternalServerException',
-        'ModelTimeoutException',
-        'ModelNotReadyException',
-      ]);
-      if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      criticResult = await invokeCriticOnce();
+      first = await attempt(MODEL_ID);
+      if (first.critique) return first;
+    } catch {
+      first = null;
     }
 
-    const raw = parseDirectorJson(extractText(criticResult));
-    return {
-      critique: normalizeCreativeCritique(raw),
-      usage: criticResult?.usage || null,
-    };
+    if (VIDEO_FALLBACK_MODEL_ID && VIDEO_FALLBACK_MODEL_ID !== MODEL_ID) {
+      try {
+        const fallback = await attempt(VIDEO_FALLBACK_MODEL_ID);
+        if (fallback.critique) return fallback;
+      } catch {
+        // Return the primary failure below; caller can decide how to degrade.
+      }
+    }
+
+    return first || { critique: null, usage: null, modelId: null };
   };
 
   const preferredModel = request?.quality?.tier === 'poor' && VIDEO_FALLBACK_MODEL_ID

@@ -39,6 +39,33 @@ ffmpeg -hide_banner -loglevel error -y -i "$VID/real-motorcycle-original.mp4" -a
 
 ffprobe -v error -show_entries stream=codec_name,codec_type,width,height,pix_fmt,profile -show_entries format=format_name,duration,size,bit_rate -of json "$VID/real-motorcycle.mp4" > "$OUT/real-motorcycle-normalized-ffprobe.json"
 
+normalize_public_ai_video() {
+  local name="$1"
+  local url="$2"
+  local original="$VID/$name-original.mp4"
+  local normalized="$VID/$name.mp4"
+
+  curl -L --fail --retry 3 --retry-delay 2 --silent --show-error "$url" -o "$original"
+  ffprobe -v error -show_entries stream=codec_name,codec_type,width,height,pix_fmt -show_entries format=format_name,duration,size -of json "$original" > "$OUT/$name-source-ffprobe.json"
+  ffmpeg -hide_banner -loglevel error -y -i "$original" -t 12 -an     -vf "scale='if(gt(iw,720),720,iw)':-2"     -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart "$normalized"
+  ffprobe -v error -show_entries stream=codec_name,codec_type,width,height,pix_fmt -show_entries format=format_name,duration,size -of json "$normalized" > "$OUT/$name-ffprobe.json"
+}
+
+# Public Veo 3 generations curated in jashankish/veo3-video-examples.
+# Audio is intentionally removed so ForgeDirector must verify the visual facts.
+normalize_public_ai_video "veo-standup" "https://github.com/user-attachments/assets/94932749-cf4c-4b8c-a6f5-4b0165aac0be"
+normalize_public_ai_video "veo-dachshund" "https://github.com/user-attachments/assets/571ce7d9-28b1-475c-8a4b-a725a10dfa83"
+normalize_public_ai_video "veo-dinosaur-guitar" "https://github.com/user-attachments/assets/15742a7b-2b50-4d4d-b99d-63e75e8fc086"
+normalize_public_ai_video "veo-pythagoras" "https://github.com/user-attachments/assets/fc1a76f9-6d43-44c9-a458-69489a1b1bbe"
+normalize_public_ai_video "veo-muffins" "https://github.com/user-attachments/assets/3bd64177-c3ca-4fc4-aaf6-b04449ce7479"
+normalize_public_ai_video "veo-runner-replicate" "https://github.com/user-attachments/assets/499d3a54-dfa1-41db-a089-93b842844c4c"
+normalize_public_ai_video "veo-opera" "https://github.com/user-attachments/assets/58274824-a51a-4f35-b176-1d766defeaaf"
+normalize_public_ai_video "veo-giraffe-bike" "https://github.com/user-attachments/assets/8641851e-9a97-447c-9196-22ca25b57a51"
+normalize_public_ai_video "veo-asmr-keyboard" "https://github.com/user-attachments/assets/4a054607-7a43-4c4f-93f8-e52d11f35fed"
+normalize_public_ai_video "veo-professor-class" "https://github.com/user-attachments/assets/ce389508-3aea-4f3f-81af-295649af6509"
+normalize_public_ai_video "veo-koala-dance" "https://github.com/user-attachments/assets/fbdb0cc3-38d2-4a7d-8577-50c737b213e9"
+normalize_public_ai_video "veo-rap-battle" "https://github.com/user-attachments/assets/a7971f81-cce6-41bc-83c3-0591443ef40f"
+
 cat > "$OUT/expectations.json" <<'JSON'
 {
   "cases": [
@@ -107,6 +134,102 @@ cat > "$OUT/expectations.json" <<'JSON'
         {"type": "mustNotShow", "rule": "motorcycle", "status": "pass"}
       ],
       "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-standup",
+      "checks": [
+        {"type": "mustShow", "rule": "person performing stand-up comedy on a stage or in a small venue", "status": "pass"},
+        {"type": "mustNotShow", "rule": "dog", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-dachshund",
+      "checks": [
+        {"type": "mustShow", "rule": "dachshund dog", "status": "pass"},
+        {"type": "mustNotShow", "rule": "giraffe", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-dinosaur-guitar",
+      "checks": [
+        {"type": "mustShow", "rule": "dinosaur", "status": "pass"},
+        {"type": "mustShow", "rule": "acoustic guitar", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-pythagoras",
+      "checks": [
+        {"type": "mustShow", "rule": "person in an ancient Greek setting", "status": "pass"},
+        {"type": "mustNotShow", "rule": "motorcycle", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-muffins",
+      "checks": [
+        {"type": "mustShow", "rule": "two muffins", "status": "pass"},
+        {"type": "mustNotShow", "rule": "dog", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-runner-replicate",
+      "checks": [
+        {"type": "mustShow", "rule": "person running outdoors", "status": "pass"},
+        {"type": "mustIncludeText", "rule": "Replicate", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-opera",
+      "checks": [
+        {"type": "mustShow", "rule": "opera singer on a stage", "status": "pass"},
+        {"type": "mustNotShow", "rule": "motorcycle", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-giraffe-bike",
+      "checks": [
+        {"type": "mustShow", "rule": "giraffe", "status": "pass"},
+        {"type": "mustShow", "rule": "motorcycle or dirt bike", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-asmr-keyboard",
+      "checks": [
+        {"type": "mustShow", "rule": "person using a keyboard", "status": "pass"},
+        {"type": "mustNotShow", "rule": "giraffe", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-professor-class",
+      "checks": [
+        {"type": "mustShow", "rule": "teacher or professor in a classroom", "status": "pass"},
+        {"type": "mustNotShow", "rule": "motorcycle", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-koala-dance",
+      "checks": [
+        {"type": "mustShow", "rule": "two koalas", "status": "pass"},
+        {"type": "mustShow", "rule": "dance stage or dance battle", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
+    },
+    {
+      "name": "veo-rap-battle",
+      "checks": [
+        {"type": "mustShow", "rule": "two people performing on a stage", "status": "pass"},
+        {"type": "mustShow", "rule": "scientific equations or science-themed stage graphics", "status": "pass"}
+      ],
+      "expectNoSpeechHallucination": true
     }
   ],
   "relational": [
@@ -158,5 +281,17 @@ analyze_case "continuity-break" "$VID/continuity-break.mp4" '{"platform":"Genera
 analyze_case "weak-static" "$VID/weak-static.mp4" '{"platform":"TikTok","objective":"engagement","durationSeconds":6,"context":"Synthetic weak-opening control."}'
 analyze_case "real-motorcycle" "$VID/real-motorcycle.mp4" '{"platform":"General","objective":"awareness","durationSeconds":18,"context":"Real AI-generated sample from tryAGI Runway.Cli.Examples: a lone 1950s cafe racer on a foggy mountain pass at sunrise; cinematic, coherent continuity, no captions intended.","requirements":{"mustShow":["motorcycle"],"mustNotShow":["wine bottle"]}}'
 analyze_case "real-wine" "$VID/real-wine.mp4" '{"platform":"General","objective":"awareness","context":"Real AI-generated sample from tryAGI Runway.Cli.Examples: a hero video built around a Stellar Vines wine bottle / label concept, with shattered bottle imagery suspended in mid-air.","requirements":{"mustShow":["wine bottle"],"mustNotShow":["motorcycle"]}}'
+analyze_case "veo-standup" "$VID/veo-standup.mp4" '{"platform":"General","objective":"awareness","context":"Public AI-generated Veo 3 sample. Verify only what is visibly present; audio has been removed.","requirements":{"mustShow":["person performing stand-up comedy on a stage or in a small venue"],"mustNotShow":["dog"]}}'
+analyze_case "veo-dachshund" "$VID/veo-dachshund.mp4" '{"platform":"General","objective":"awareness","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["dachshund dog"],"mustNotShow":["giraffe"]}}'
+analyze_case "veo-dinosaur-guitar" "$VID/veo-dinosaur-guitar.mp4" '{"platform":"General","objective":"awareness","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["dinosaur","acoustic guitar"]}}'
+analyze_case "veo-pythagoras" "$VID/veo-pythagoras.mp4" '{"platform":"General","objective":"education","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["person in an ancient Greek setting"],"mustNotShow":["motorcycle"]}}'
+analyze_case "veo-muffins" "$VID/veo-muffins.mp4" '{"platform":"General","objective":"engagement","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["two muffins"],"mustNotShow":["dog"]}}'
+analyze_case "veo-runner-replicate" "$VID/veo-runner-replicate.mp4" '{"platform":"General","objective":"awareness","context":"Public AI-generated Veo 3 sample. Verify only visible facts and on-screen text; audio has been removed.","requirements":{"mustShow":["person running outdoors"],"mustIncludeText":["Replicate"]}}'
+analyze_case "veo-opera" "$VID/veo-opera.mp4" '{"platform":"General","objective":"awareness","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["opera singer on a stage"],"mustNotShow":["motorcycle"]}}'
+analyze_case "veo-giraffe-bike" "$VID/veo-giraffe-bike.mp4" '{"platform":"General","objective":"engagement","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["giraffe","motorcycle or dirt bike"]}}'
+analyze_case "veo-asmr-keyboard" "$VID/veo-asmr-keyboard.mp4" '{"platform":"General","objective":"awareness","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["person using a keyboard"],"mustNotShow":["giraffe"]}}'
+analyze_case "veo-professor-class" "$VID/veo-professor-class.mp4" '{"platform":"General","objective":"education","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["teacher or professor in a classroom"],"mustNotShow":["motorcycle"]}}'
+analyze_case "veo-koala-dance" "$VID/veo-koala-dance.mp4" '{"platform":"General","objective":"engagement","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["two koalas","dance stage or dance battle"]}}'
+analyze_case "veo-rap-battle" "$VID/veo-rap-battle.mp4" '{"platform":"General","objective":"engagement","context":"Public AI-generated Veo 3 sample. Verify only visible facts; audio has been removed.","requirements":{"mustShow":["two people performing on a stage","scientific equations or science-themed stage graphics"]}}'
 
 python3 tests/grade-live-video-benchmark.py "$OUT"

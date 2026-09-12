@@ -4,6 +4,8 @@ import {
   parseDirectorJson,
   normalizeCampaignManifest,
   buildDeterministicFallbackCampaign,
+  normalizeCreativeCritique,
+  critiqueNeedsRepair,
 } from '../backend/director-reliability.mjs';
 import { evaluateCampaign } from '../backend/qa.mjs';
 
@@ -179,5 +181,56 @@ assert.notEqual(
 );
 assert.equal(evaluateCampaign(overstuffed).passed, true);
 assert.ok(evaluateCampaign(overstuffed).score >= 90);
+
+const strongCritique = normalizeCreativeCritique({
+  score: 91,
+  dimensions: {
+    briefFit: 92,
+    hookStrength: 90,
+    visualSpecificity: 91,
+    progression: 89,
+    generationReadiness: 93,
+    continuity: 94,
+    claimRestraint: 95,
+  },
+  blockingIssues: [],
+  improvements: ['Optional polish only.'],
+});
+assert.equal(strongCritique.passed, true);
+assert.equal(critiqueNeedsRepair(strongCritique), false);
+
+const inflatedCritique = normalizeCreativeCritique({
+  score: 99,
+  dimensions: {
+    briefFit: 45,
+    hookStrength: 40,
+    visualSpecificity: 35,
+    progression: 30,
+    generationReadiness: 45,
+    continuity: 50,
+    claimRestraint: 90,
+  },
+  blockingIssues: [],
+  improvements: [],
+});
+assert.ok(inflatedCritique.score < 82);
+assert.equal(critiqueNeedsRepair(inflatedCritique), true);
+
+const blockedCritique = normalizeCreativeCritique({
+  score: 95,
+  dimensions: {
+    briefFit: 95,
+    hookStrength: 95,
+    visualSpecificity: 95,
+    progression: 95,
+    generationReadiness: 95,
+    continuity: 95,
+    claimRestraint: 95,
+  },
+  blockingIssues: ['Invented a guaranteed performance claim.'],
+  improvements: ['Remove the unsupported claim.'],
+});
+assert.equal(blockedCritique.passed, false);
+assert.equal(critiqueNeedsRepair(blockedCritique), true);
 
 console.log('Director reliability tests passed');

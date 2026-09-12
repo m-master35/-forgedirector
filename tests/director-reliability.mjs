@@ -141,4 +141,43 @@ assert.equal(revisionFallback.platform, previous.platform);
 assert.equal(revisionFallback.scenes.length, previous.scenes.length);
 assert.equal(evaluateCampaign(revisionFallback).passed, true);
 
+const overstuffed = normalizeCampaignManifest({
+  summary: 'A valid but poorly prepared campaign.',
+  audience: 'General audience',
+  platform: 'TikTok',
+  aspectRatio: '9:16',
+  durationSeconds: 10,
+  continuity: { leadCharacter: 'Same person', locked: false },
+  scenes: [
+    {
+      id: 1,
+      durationSeconds: 5,
+      visualDirection: 'Person sits at a desk and looks at a phone.',
+      voiceover: 'This voiceover has far too many words for a five second scene and should be shortened automatically before the campaign leaves the reliability layer.',
+      generationPrompt: 'Make this scene beautiful and premium and cinematic with the same person.',
+    },
+    {
+      id: 2,
+      durationSeconds: 5,
+      visualDirection: 'Person sits at a desk and looks at a phone.',
+      voiceover: 'This second line is also intentionally much too long for its available five second duration and needs to be shortened.',
+      generationPrompt: 'Make this scene beautiful and premium and cinematic with the same person.',
+    },
+  ],
+}, {
+  request: prepareCreativeRequest({ brief: 'A simple desk-based productivity story.' }),
+});
+
+for (const scene of overstuffed.scenes) {
+  const maxWords = Math.max(4, Math.floor(scene.durationSeconds * 2.6));
+  assert.ok(scene.voiceover.split(/\s+/).filter(Boolean).length <= maxWords);
+  assert.ok(scene.generationPrompt.length >= 120);
+}
+assert.notEqual(
+  overstuffed.scenes[0].generationPrompt.toLowerCase(),
+  overstuffed.scenes[1].generationPrompt.toLowerCase(),
+);
+assert.equal(evaluateCampaign(overstuffed).passed, true);
+assert.ok(evaluateCampaign(overstuffed).score >= 90);
+
 console.log('Director reliability tests passed');

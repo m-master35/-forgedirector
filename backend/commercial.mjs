@@ -13,6 +13,7 @@ import {
   VIDEO_ANALYSIS_SYSTEM_PROMPT,
   buildVideoAnalysisPrompt,
   normalizeVideoAnalysis,
+  assertAssetId,
 } from './video-intelligence.mjs';
 import {
   prepareCreativeRequest,
@@ -1152,15 +1153,20 @@ export const handler = async (event) => {
   try {
     if (method === 'POST' && path === '/v1/uploads') {
       const contentType = assertText(payload?.contentType, 'contentType', 100);
-      const declaredSize = payload?.sizeBytes === undefined ? null : Number(payload.sizeBytes);
-      if (declaredSize !== null && (!Number.isFinite(declaredSize) || declaredSize <= 0 || declaredSize > MAX_VIDEO_BYTES)) {
-        const error = new Error(`sizeBytes must be between 1 and ${MAX_VIDEO_BYTES}.`);
+      if (payload?.sizeBytes === undefined || payload?.sizeBytes === null || payload?.sizeBytes === '') {
+        const error = new Error('sizeBytes is required.');
+        error.statusCode = 400;
+        throw error;
+      }
+      const declaredSize = Number(payload.sizeBytes);
+      if (!Number.isInteger(declaredSize) || declaredSize <= 0 || declaredSize > MAX_VIDEO_BYTES) {
+        const error = new Error(`sizeBytes must be an integer between 1 and ${MAX_VIDEO_BYTES}.`);
         error.statusCode = 400;
         throw error;
       }
 
       const assetId = crypto.randomUUID();
-      const upload = await createVideoUpload({ assetId, contentType });
+      const upload = await createVideoUpload({ assetId, contentType, sizeBytes: declaredSize });
       return response(200, {
         upload,
         next: {
@@ -1172,9 +1178,9 @@ export const handler = async (event) => {
     }
 
     if (method === 'POST' && path === '/v1/analyze') {
-      const assetId = assertText(payload?.assetId, 'assetId', 100);
-      const asset = await resolveVideoAsset(assetId);
+      const assetId = assertAssetId(assertText(payload?.assetId, 'assetId', 100));
       try {
+        const asset = await resolveVideoAsset(assetId);
         const result = await invokeVideoAnalysis({ asset, payload });
         return response(200, {
           analysis: result.analysis,

@@ -456,3 +456,63 @@ export function normalizeCreativeCritique(value) {
 export function critiqueNeedsRepair(critique) {
   return !critique || critique.passed !== true;
 }
+
+
+function explicitRevisionTargets(instruction, sceneCount) {
+  const text = cleanText(instruction, 6000).toLowerCase();
+  if (!text || sceneCount <= 0) return null;
+
+  const targets = new Set();
+  const numbered = [...text.matchAll(/\bscene\s*(\d{1,2})\b/g)];
+  for (const match of numbered) {
+    const number = Number(match[1]);
+    if (number >= 1 && number <= sceneCount) targets.add(number);
+  }
+
+  if (/\b(first|opening|intro)\s+scene\b|\bscene\s+one\b/.test(text)) targets.add(1);
+  if (/\b(last|final|ending|end)\s+scene\b|\bscene\s+(?:last|final)\b/.test(text)) targets.add(sceneCount);
+
+  const onlyLanguage = /\bonly\b|\bjust\b|\bpreserve\b|\bkeep\b.*\b(?:same|unchanged)\b|\bdon['’]?t\s+change\b/.test(text);
+  if (!targets.size || !onlyLanguage) return null;
+  return targets;
+}
+
+export function applyRevisionPreservation(candidate, previousCampaign, instruction) {
+  if (!candidate || typeof candidate !== 'object' || !previousCampaign || typeof previousCampaign !== 'object') {
+    return candidate;
+  }
+
+  const previousScenes = Array.isArray(previousCampaign.scenes) ? previousCampaign.scenes : [];
+  const candidateScenes = Array.isArray(candidate.scenes) ? candidate.scenes : [];
+  if (!previousScenes.length || candidateScenes.length !== previousScenes.length) return candidate;
+
+  const targets = explicitRevisionTargets(instruction, previousScenes.length);
+  if (!targets) return candidate;
+
+  const next = clone(candidate);
+  next.scenes = candidateScenes.map((scene, index) => {
+    const sceneNumber = index + 1;
+    return targets.has(sceneNumber) ? scene : clone(previousScenes[index]);
+  });
+
+  const text = cleanText(instruction, 6000).toLowerCase();
+  if (!/\b(duration|seconds?|length|runtime)\b/.test(text)) {
+    next.durationSeconds = previousCampaign.durationSeconds;
+  }
+  if (!/\b(platform|tiktok|reels?|youtube|shorts?)\b/.test(text)) {
+    next.platform = previousCampaign.platform;
+  }
+  if (!/\b(aspect|9:16|16:9|1:1|vertical|horizontal|square)\b/.test(text)) {
+    next.aspectRatio = previousCampaign.aspectRatio;
+  }
+  if (!/\b(audience|target|viewer|customer)\b/.test(text)) {
+    next.audience = previousCampaign.audience;
+  }
+  if (!/\b(character|actor|person|wardrobe|outfit|continuity)\b/.test(text)) {
+    next.continuity = clone(previousCampaign.continuity);
+  }
+
+  next.changeSummary = cleanText(candidate.changeSummary, 1200)
+    || 'Applied the requested scoped revision while preserving unrelated campaign decisions.';
+  return next;
+}

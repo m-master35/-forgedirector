@@ -555,16 +555,20 @@ function explicitRevisionTargets(instruction, sceneCount) {
   if (!text || sceneCount <= 0) return null;
 
   const targets = new Set();
-  const numbered = [...text.matchAll(/\bscene\s*(\d{1,2})\b/g)];
+  const sceneWord = '(?:scene|sceen|scne|scean|scen)';
+  const numberedPattern = new RegExp('\\b' + sceneWord + '\\s*(\\d{1,2})\\b', 'g');
+  const numbered = [...text.matchAll(numberedPattern)];
   for (const match of numbered) {
     const number = Number(match[1]);
     if (number >= 1 && number <= sceneCount) targets.add(number);
   }
 
-  if (/\b(first|opening|intro)\s+scene\b|\bscene\s+one\b/.test(text)) targets.add(1);
-  if (/\b(last|final|ending|end)\s+scene\b|\bscene\s+(?:last|final)\b/.test(text)) targets.add(sceneCount);
+  const firstPattern = new RegExp('\\b(first|opening|intro)\\s+' + sceneWord + '\\b|\\b' + sceneWord + '\\s+one\\b');
+  const lastPattern = new RegExp('\\b(last|final|ending|end)\\s+' + sceneWord + '\\b|\\b' + sceneWord + '\\s+(?:last|final)\\b');
+  if (firstPattern.test(text)) targets.add(1);
+  if (lastPattern.test(text)) targets.add(sceneCount);
 
-  const onlyLanguage = /\bonly\b|\bjust\b|\bpreserve\b|\bkeep\b.*\b(?:same|unchanged)\b|\bdon['’]?t\s+change\b/.test(text);
+  const onlyLanguage = /\bonly\b|\bjust\b|\bpreserv\w*\b|\bkeep\b|\bkeap\b|\bunchang\w*\b|\beverything\s+else\b|\bevryth?ng\s+els\w*\b|\b(?:keep|keap)[^.!?]{0,80}\bsame\b|\bdon['’]?t\s+change\b/.test(text);
   if (!targets.size || !onlyLanguage) return null;
   return targets;
 }

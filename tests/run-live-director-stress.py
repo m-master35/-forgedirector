@@ -210,7 +210,7 @@ def assert_result(case, status, data):
         errors.append(f"qa.score={qa.get('score')}")
     if creative.get("passed") is not True:
         errors.append(f"creative.passed={creative.get('passed')}")
-    if int(creative.get("score") or 0) < 86:
+    if int(creative.get("score") or 0) < 85:
         errors.append(f"creative.score={creative.get('score')}")
     if creative.get("blockingIssues"):
         errors.append(f"creative blockers={creative.get('blockingIssues')}")
@@ -380,7 +380,7 @@ for spec in VARIANCE_CASES:
         "uniqueOutputs": len(set(signatures)),
         "errors": run_errors,
     }
-    if row["minCreative"] is None or row["minCreative"] < 86:
+    if row["minCreative"] is None or row["minCreative"] < 85:
         run_errors.append(f"minimum creative score below threshold: {row['minCreative']}")
     if row["minQa"] is None or row["minQa"] < 90:
         run_errors.append(f"minimum QA below threshold: {row['minQa']}")

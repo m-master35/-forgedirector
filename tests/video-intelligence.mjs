@@ -7,6 +7,7 @@ import {
   consensusVideoCompliance,
   applyVerifiedVideoCompliance,
   assessVideoAnalysisCoverage,
+  isAuthoritativeVerifierCoverage,
   videoFormatFromContentType,
 } from '../backend/video-intelligence.mjs';
 

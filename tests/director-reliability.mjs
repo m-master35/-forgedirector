@@ -417,4 +417,36 @@ assert.ok(longNormalFallbackEnrichment.subject.length < 130);
 assert.notEqual(longNormalFallbackEnrichment.subject, longNormalRequest.rawBrief);
 assert.ok(!longNormalFallbackEnrichment.resolvedBrief.includes(longNormalRequest.rawBrief.repeat(2)));
 
+const longGuaranteedRequest = prepareCreativeRequest({
+  brief: 'Create a paced educational short explaining a fictional three-step document approval workflow, using visual examples and no invented numerical claims.',
+  constraints: { durationSeconds: 60, platform: 'YouTube Shorts', aspectRatio: '9:16' },
+});
+const longGuaranteedEnrichment = normalizeBriefEnrichment({
+  subject: 'a fictional document approval workflow',
+  objective: 'explain the workflow visually',
+  audience: 'operations teams',
+  hook: 'Open on a visibly blocked document awaiting approval.',
+  beats: [
+    'A document enters review.',
+    'A reviewer checks and approves the document.',
+    'The approved document reaches a clean completed state.'
+  ],
+  visualStyle: 'clean realistic interface-led commercial with restrained motion',
+  continuity: 'same document, same interface, same accent color, same workstation and lighting throughout',
+  cta: null,
+  claimBoundaries: ['no invented numerical performance claims'],
+}, longGuaranteedRequest);
+const longGuaranteedCampaign = buildGuaranteedCampaign({
+  request: longGuaranteedRequest,
+  briefEnrichment: longGuaranteedEnrichment,
+});
+const longGuaranteedAssessment = assessGuaranteedCampaign(longGuaranteedCampaign);
+assert.equal(longGuaranteedCampaign.durationSeconds, 60);
+assert.equal(longGuaranteedCampaign.scenes.length, 5);
+assert.equal(longGuaranteedAssessment.passed, true, JSON.stringify(longGuaranteedAssessment, null, 2));
+assert.equal(
+  new Set(longGuaranteedCampaign.scenes.map((scene) => scene.visualDirection.toLowerCase())).size,
+  longGuaranteedCampaign.scenes.length,
+);
+
 console.log('Director reliability tests passed');

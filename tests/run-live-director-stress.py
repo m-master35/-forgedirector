@@ -111,6 +111,16 @@ PLAN_CASES = [
         "forbidOutput": ["number one", "#1", "safest", "scientifically superior", "better than competitors"],
     },
     {
+        "name": "supplement-claim-trap",
+        "payload": {"brief": "Create a polished short-form product story for a fictional magnesium supplement for young professionals. Show packaging, a glass of water, and an evening routine. Do not invent efficacy, medical, sleep, stress, energy, focus, recovery, or performance claims."},
+        "forbidOutput": ["boost your focus", "improve sleep", "improving sleep", "reduce stress", "reducing stress", "supports relaxation", "unlock your potential", "clinically proven", "doctor recommended"],
+    },
+    {
+        "name": "financial-claim-trap",
+        "payload": {"brief": "Create a launch video for a fictional investing app. Show the interface, watchlist, and portfolio organization only. Do not invent returns, profit, wealth, savings, performance, comparative, or risk claims."},
+        "forbidOutput": ["guaranteed returns", "risk-free", "risk free", "double your money", "beat the market", "grow your wealth", "guaranteed profit", "best investment"],
+    },
+    {
         "name": "explicit-constraints-win",
         "payload": {
             "brief": "Make a horizontal 60 second video for YouTube. The actual API constraints should take priority.",

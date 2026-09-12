@@ -725,11 +725,7 @@ export function buildGuaranteedCampaign({
   if (isRevision && previousCampaign) {
     const preserved = clone(previousCampaign);
     preserved.changeSummary = 'Returned the last validated campaign because the requested revision could not be improved without dropping below the production quality floor.';
-    return normalizeCampaignManifest(preserved, {
-      request,
-      previousCampaign,
-      isRevision: true,
-    });
+    return preserved;
   }
 
   const constraints = request.constraints || {};

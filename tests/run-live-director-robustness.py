@@ -95,22 +95,32 @@ def assert_campaign(name, status, data):
     if not isinstance(prompt_quality, dict) or "tier" not in prompt_quality:
         errors.append("missing promptQuality meta")
 
+    quality_gate = meta.get("qualityGate")
+    if not isinstance(quality_gate, dict) or quality_gate.get("passed") is not True:
+        errors.append(f"authoritative qualityGate={quality_gate}")
+
     creative_quality = meta.get("creativeQuality")
-    if not isinstance(creative_quality, dict):
-        errors.append("missing creativeQuality meta")
+    guaranteed = meta.get("guaranteedBlueprintUsed") is True
+    if guaranteed:
+        assessment = meta.get("guaranteedBlueprintAssessment")
+        if not isinstance(assessment, dict) or assessment.get("passed") is not True:
+            errors.append(f"guaranteed blueprint assessment={assessment}")
     else:
-        if creative_quality.get("passed") is not True:
-            errors.append(
-                f"creativeQuality.passed={creative_quality.get('passed')} "
-                f"score={creative_quality.get('score')} "
-                f"weak={creative_quality.get('weakDimensions')} "
-                f"dims={creative_quality.get('dimensions')} "
-                f"improvements={creative_quality.get('improvements')}"
-            )
-        if int(creative_quality.get("score") or 0) < 85:
-            errors.append(f"creativeQuality.score={creative_quality.get('score')}")
-        if creative_quality.get("blockingIssues"):
-            errors.append(f"creative blockers={creative_quality.get('blockingIssues')}")
+        if not isinstance(creative_quality, dict):
+            errors.append("missing creativeQuality meta")
+        else:
+            if creative_quality.get("passed") is not True:
+                errors.append(
+                    f"creativeQuality.passed={creative_quality.get('passed')} "
+                    f"score={creative_quality.get('score')} "
+                    f"weak={creative_quality.get('weakDimensions')} "
+                    f"dims={creative_quality.get('dimensions')} "
+                    f"improvements={creative_quality.get('improvements')}"
+                )
+            if int(creative_quality.get("score") or 0) < 85:
+                errors.append(f"creativeQuality.score={creative_quality.get('score')}")
+            if creative_quality.get("blockingIssues"):
+                errors.append(f"creative blockers={creative_quality.get('blockingIssues')}")
 
     return errors
 

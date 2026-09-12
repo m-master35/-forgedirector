@@ -9,6 +9,7 @@ on:
       - .github/workflows/deploy-commercial.yml
       - backend/commercial.mjs
       - backend/director-prompt.mjs
+      - backend/director-reliability.mjs
       - backend/qa.mjs
       - backend/storage.mjs
       - backend/video-intelligence.mjs
@@ -144,6 +145,24 @@ jobs:
           test "$AUTH_STATUS" = "200"
           grep -q '"campaign"' /tmp/plan.json
           grep -q '"operation":"plan"' /tmp/plan.json
+          jq -e '.qa.passed == true' /tmp/plan.json >/dev/null
+          jq -e '.qa.score >= 85' /tmp/plan.json >/dev/null
+
+          VAGUE_HEADERS=(-H 'content-type: application/json')
+          if [ -n "${RAPIDAPI_PROXY_SECRET:-}" ]; then
+            VAGUE_HEADERS+=(-H "x-rapidapi-proxy-secret: $RAPIDAPI_PROXY_SECRET")
+          fi
+          VAGUE_STATUS=$(curl -sS -o /tmp/vague-plan.json -w '%{http_code}' \
+            -X POST \
+            "${VAGUE_HEADERS[@]}" \
+            --data '{"brief":"make it good"}' \
+            "$API_URL/v1/plan")
+          cat /tmp/vague-plan.json
+          test "$VAGUE_STATUS" = "200"
+          jq -e '.campaign.scenes | length >= 2' /tmp/vague-plan.json >/dev/null
+          jq -e '.qa.passed == true' /tmp/vague-plan.json >/dev/null
+          jq -e '.qa.score >= 85' /tmp/vague-plan.json >/dev/null
+          jq -e '.meta.promptQuality.tier == "weak" or .meta.promptQuality.tier == "poor"' /tmp/vague-plan.json >/dev/null
 
       - name: Smoke test real video intelligence path
         env:

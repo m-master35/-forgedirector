@@ -1,5 +1,10 @@
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
-import { SYSTEM_PROMPT, buildUserPrompt } from './director-prompt.mjs';
+import {
+  SYSTEM_PROMPT,
+  buildUserPrompt,
+  CRITIC_SYSTEM_PROMPT,
+  buildCriticPrompt,
+} from './director-prompt.mjs';
 import { evaluateCampaign } from './qa.mjs';
 import { createVideoUpload, deleteVideoAsset, resolveVideoAsset } from './storage.mjs';
 import {
@@ -13,6 +18,8 @@ import {
   normalizeCampaignManifest,
   buildDeterministicFallbackCampaign,
   buildDirectorRepairPrompt,
+  normalizeCreativeCritique,
+  critiqueNeedsRepair,
 } from './director-reliability.mjs';
 
 const client = new BedrockRuntimeClient({
@@ -276,6 +283,49 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   };
 
+  const runCreativeCritic = async (candidate) => {
+    const criticModelId = MODEL_ID;
+    if (!criticModelId) return { critique: null, usage: null };
+
+    const invokeCriticOnce = async () => client.send(new ConverseCommand({
+      modelId: criticModelId,
+      system: [{ text: CRITIC_SYSTEM_PROMPT }],
+      messages: [{
+        role: 'user',
+        content: [{ text: buildCriticPrompt({ request, campaign: candidate }) }],
+      }],
+      inferenceConfig: {
+        maxTokens: 1400,
+        temperature: 0,
+        topP: 0.9,
+      },
+    }));
+
+    let criticResult;
+    try {
+      criticResult = await invokeCriticOnce();
+    } catch (error) {
+      const name = String(error?.name || error?.Code || '');
+      const status = Number(error?.$metadata?.httpStatusCode || 0);
+      const retryable = new Set([
+        'ThrottlingException',
+        'ServiceUnavailableException',
+        'InternalServerException',
+        'ModelTimeoutException',
+        'ModelNotReadyException',
+      ]);
+      if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      criticResult = await invokeCriticOnce();
+    }
+
+    const raw = parseDirectorJson(extractText(criticResult));
+    return {
+      critique: normalizeCreativeCritique(raw),
+      usage: criticResult?.usage || null,
+    };
+  };
+
   const preferredModel = request?.quality?.tier === 'poor' && VIDEO_FALLBACK_MODEL_ID
     ? VIDEO_FALLBACK_MODEL_ID
     : MODEL_ID;
@@ -332,13 +382,24 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   let qa = evaluateCampaign(normalized);
   const initialQa = qa;
   let repairUsed = false;
+  let creativeCritique = null;
+  let criticUsage = null;
 
-  if (!parsed || !qa.passed || qa.score < 90) {
+  try {
+    const criticResult = await runCreativeCritic(normalized);
+    creativeCritique = criticResult.critique;
+    criticUsage = criticResult.usage;
+  } catch {
+    creativeCritique = null;
+  }
+
+  if (!parsed || !qa.passed || qa.score < 90 || (creativeCritique && critiqueNeedsRepair(creativeCritique))) {
     repairUsed = true;
     const repairPrompt = buildDirectorRepairPrompt({
       originalMessage: message,
       candidate: normalized,
       qa,
+      creativeCritic: creativeCritique,
       previousCampaign: campaign,
     });
     const repairModel = VIDEO_FALLBACK_MODEL_ID || usedModelId;
@@ -353,14 +414,40 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
           isRevision,
         });
         const repairedQa = evaluateCampaign(repaired);
+        let repairedCritique = null;
+        let repairedCriticUsage = null;
+        try {
+          const criticResult = await runCreativeCritic(repaired);
+          repairedCritique = criticResult.critique;
+          repairedCriticUsage = criticResult.usage;
+        } catch {
+          repairedCritique = null;
+        }
+
+        const currentCreativeScore = creativeCritique?.score ?? 0;
+        const repairedCreativeScore = repairedCritique?.score ?? 0;
+        const structuralUpgrade = repairedQa.passed && !qa.passed;
+        const semanticUpgrade = repairedCritique
+          && (
+            !creativeCritique
+            || (repairedCritique.passed && !creativeCritique.passed)
+            || repairedCreativeScore > currentCreativeScore
+          );
+        const noSemanticRegression = !creativeCritique
+          || !repairedCritique
+          || repairedCreativeScore >= currentCreativeScore;
+
         if (
-          (repairedQa.passed && !qa.passed)
-          || repairedQa.score >= qa.score
+          structuralUpgrade
+          || semanticUpgrade
+          || (repairedQa.score > qa.score && noSemanticRegression)
         ) {
           normalized = repaired;
           qa = repairedQa;
           result = repairResult;
           usedModelId = repairModel;
+          if (repairedCritique) creativeCritique = repairedCritique;
+          if (repairedCriticUsage) criticUsage = repairedCriticUsage;
         }
       }
     } catch {
@@ -377,6 +464,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       degradedFallbackUsed,
       modelId: usedModelId,
       initialQa,
+      creativeCritique,
+      criticUsage,
     };
   } catch {
     degradedFallbackUsed = true;
@@ -392,6 +481,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       degradedFallbackUsed,
       modelId: usedModelId,
       initialQa,
+      creativeCritique,
+      criticUsage,
     };
   }
 }

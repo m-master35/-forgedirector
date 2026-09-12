@@ -770,6 +770,124 @@ export function normalizeVideoCompliance(value, requirements = {}) {
   return normalizeCompliance(value, requirements);
 }
 
+
+export function consensusVideoCompliance(verifications = [], requirements = {}) {
+  const expected = expectedRequirementChecks(requirements);
+  if (expected.length === 0) {
+    return {
+      compliance: {
+        status: 'not_requested',
+        passed: null,
+        failedCount: 0,
+        uncertainCount: 0,
+        checks: [],
+      },
+      agreement: {
+        verifierCount: 0,
+        unanimousChecks: 0,
+        disputedChecks: 0,
+        singleVerifierChecks: 0,
+      },
+    };
+  }
+
+  const valid = asArray(verifications).filter((item) => (
+    item
+    && typeof item === 'object'
+    && Array.isArray(item.checks)
+  ));
+
+  const checks = expected.map((item) => {
+    const observations = valid
+      .map((verification, verifierIndex) => {
+        const match = verification.checks.find((check) => (
+          check?.type === item.type
+          && check?.rule === item.rule
+          && ['pass', 'fail', 'uncertain'].includes(check?.status)
+        ));
+        return match ? { ...match, verifierIndex } : null;
+      })
+      .filter(Boolean);
+
+    if (observations.length < 2) {
+      const only = observations[0];
+      return {
+        ...item,
+        status: 'uncertain',
+        evidence: only
+          ? `Only one independent blind verifier returned a usable verdict (${only.status}). A second verifier is required for an authoritative compliance decision.`
+          : 'No independent blind verifier returned a usable verdict for this requirement.',
+        timestampSeconds: only?.timestampSeconds ?? null,
+        consensus: {
+          verifierCount: observations.length,
+          unanimous: false,
+          statuses: observations.map((entry) => entry.status),
+        },
+      };
+    }
+
+    const statuses = observations.map((entry) => entry.status);
+    const uniqueStatuses = [...new Set(statuses)];
+    if (uniqueStatuses.length !== 1 || uniqueStatuses[0] === 'uncertain') {
+      const evidence = observations
+        .map((entry, index) => `verifier ${index + 1}: ${entry.status} — ${String(entry.evidence || '').slice(0, 240)}`)
+        .join(' | ');
+      return {
+        ...item,
+        status: 'uncertain',
+        evidence: `Independent blind verifiers did not reach a unanimous determinate verdict. ${evidence}`.slice(0, 800),
+        timestampSeconds: observations.find((entry) => Number.isFinite(Number(entry.timestampSeconds)))?.timestampSeconds ?? null,
+        consensus: {
+          verifierCount: observations.length,
+          unanimous: false,
+          statuses,
+        },
+      };
+    }
+
+    const status = uniqueStatuses[0];
+    const evidenceParts = [...new Set(
+      observations
+        .map((entry) => String(entry.evidence || '').trim())
+        .filter(Boolean),
+    )];
+    return {
+      ...item,
+      status,
+      evidence: evidenceParts.join(' | ').slice(0, 800)
+        || `Two independent blind verifiers unanimously returned ${status}.`,
+      timestampSeconds: observations.find((entry) => Number.isFinite(Number(entry.timestampSeconds)))?.timestampSeconds ?? null,
+      consensus: {
+        verifierCount: observations.length,
+        unanimous: true,
+        statuses,
+      },
+    };
+  });
+
+  const failedCount = checks.filter((check) => check.status === 'fail').length;
+  const uncertainCount = checks.filter((check) => check.status === 'uncertain').length;
+  const status = failedCount > 0 ? 'fail' : uncertainCount > 0 ? 'needs_review' : 'pass';
+  const unanimousChecks = checks.filter((check) => check.consensus?.unanimous === true).length;
+  const singleVerifierChecks = checks.filter((check) => check.consensus?.verifierCount === 1).length;
+
+  return {
+    compliance: {
+      status,
+      passed: status === 'pass',
+      failedCount,
+      uncertainCount,
+      checks,
+    },
+    agreement: {
+      verifierCount: valid.length,
+      unanimousChecks,
+      disputedChecks: checks.length - unanimousChecks,
+      singleVerifierChecks,
+    },
+  };
+}
+
 export function applyVerifiedVideoCompliance(analysis, compliance) {
   if (!analysis || typeof analysis !== 'object' || Array.isArray(analysis)) {
     throw new Error('A normalized video analysis is required.');

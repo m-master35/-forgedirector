@@ -247,6 +247,11 @@ function authorized(event, path) {
 async function invokeDirector({ message, campaign, request, isRevision = false }) {
   let modelServiceDegraded = false;
   let modelCallCount = 0;
+  const aggregateUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+  };
   const MAX_MODEL_CALLS = 8;
   const markModelCall = () => {
     modelCallCount += 1;
@@ -256,6 +261,21 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       throw error;
     }
   };
+  const recordModelUsage = (result) => {
+    const usage = result?.usage || {};
+    const inputTokens = Number(usage.inputTokens || 0);
+    const outputTokens = Number(usage.outputTokens || 0);
+    const totalTokens = Number(usage.totalTokens || (inputTokens + outputTokens));
+    if (Number.isFinite(inputTokens) && inputTokens > 0) aggregateUsage.inputTokens += inputTokens;
+    if (Number.isFinite(outputTokens) && outputTokens > 0) aggregateUsage.outputTokens += outputTokens;
+    if (Number.isFinite(totalTokens) && totalTokens > 0) aggregateUsage.totalTokens += totalTokens;
+  };
+  const requestUsage = () => ({
+    modelCalls: modelCallCount,
+    inputTokens: aggregateUsage.inputTokens,
+    outputTokens: aggregateUsage.outputTokens,
+    totalTokens: aggregateUsage.totalTokens,
+  });
   const isRetryableModelError = (error) => {
     const retryable = new Set([
       'ThrottlingException',
@@ -282,12 +302,15 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       degradedFallbackUsed: true,
       modelId: null,
       initialQa: evaluateCampaign(fallbackCampaign),
+      requestUsage: requestUsage(),
+      modelServiceDegraded,
+      modelCallCount,
     };
   }
 
   const invokeOnce = async (modelId, promptText) => {
     markModelCall();
-    return client.send(new ConverseCommand({
+    const modelResult = await client.send(new ConverseCommand({
     modelId,
     system: [{ text: SYSTEM_PROMPT }],
     messages: [{
@@ -300,6 +323,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       topP: 0.9,
     },
   }));
+    recordModelUsage(modelResult);
+    return modelResult;
   };
 
   const sendDirector = async (modelId, promptText) => {
@@ -318,7 +343,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
 
     const invokeCriticOnce = async (modelId) => {
       markModelCall();
-      return client.send(new ConverseCommand({
+      const modelResult = await client.send(new ConverseCommand({
       modelId,
       system: [{ text: CRITIC_SYSTEM_PROMPT }],
       messages: [{
@@ -331,6 +356,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         topP: 0.9,
       },
     }));
+      recordModelUsage(modelResult);
+      return modelResult;
     };
 
     const attempt = async (modelId) => {
@@ -465,6 +492,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         try {
           markModelCall();
           enrichResult = await enrichWithModel(modelId);
+          recordModelUsage(enrichResult);
         } catch (error) {
           if (isRetryableModelError(error)) modelServiceDegraded = true;
           throw error;
@@ -795,6 +823,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
 
       for (const modelId of [...new Set(finalEnrichmentModels)]) {
         try {
+          markModelCall();
           const enrichResult = await client.send(new ConverseCommand({
             modelId,
             system: [{ text: BRIEF_ENRICHER_SYSTEM_PROMPT }],
@@ -808,6 +837,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
               topP: 0.9,
             },
           }));
+          recordModelUsage(enrichResult);
           const parsedEnrichment = parseDirectorJson(extractText(enrichResult));
           const normalizedEnrichment = normalizeBriefEnrichment(parsedEnrichment, request);
           if (normalizedEnrichment) {
@@ -910,6 +940,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       criticUsage,
       modelServiceDegraded,
       modelCallCount,
+      requestUsage: requestUsage(),
     };
   } catch {
     degradedFallbackUsed = true;
@@ -937,6 +968,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       criticUsage,
       modelServiceDegraded,
       modelCallCount,
+      requestUsage: requestUsage(),
     };
   }
 }
@@ -1270,6 +1302,7 @@ export const handler = async (event) => {
               },
           modelServiceDegraded: result.modelServiceDegraded,
           modelCallCount: result.modelCallCount,
+          requestUsage: result.requestUsage,
           criticUsage: result.criticUsage,
           requestId,
         },
@@ -1331,6 +1364,7 @@ export const handler = async (event) => {
               },
           modelServiceDegraded: result.modelServiceDegraded,
           modelCallCount: result.modelCallCount,
+          requestUsage: result.requestUsage,
           criticUsage: result.criticUsage,
           requestId,
         },

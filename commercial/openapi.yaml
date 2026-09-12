@@ -295,6 +295,7 @@ components:
           type: number
           minimum: 1
           maximum: 120
+          description: Strongly recommended. When supplied, ForgeDirector verifies that the analysis timeline covers at least 85% of the declared duration and automatically retries with the stronger video model if needed.
         context:
           type: string
           maxLength: 3000
@@ -342,11 +343,40 @@ components:
           $ref: '#/components/schemas/VideoAnalysis'
         meta:
           type: object
-          additionalProperties: true
+          properties:
+            operation:
+              type: string
+              enum: [analyze]
+            modelId:
+              type: string
+            platform:
+              type: string
+            objective:
+              type: string
+            requirementsApplied:
+              type: boolean
+            analysisRetryUsed:
+              type: boolean
+            coverageRetryUsed:
+              type: boolean
+              description: True when ForgeDirector reran analysis because the first model response did not demonstrate full-duration coverage.
+            fallbackModelUsed:
+              type: boolean
+            asset:
+              type: object
+              additionalProperties: true
+            usage:
+              type: object
+              nullable: true
+              additionalProperties: true
+            scoringNotice:
+              type: string
+            requestId:
+              type: string
 
     VideoAnalysis:
       type: object
-      required: [analysisVersion, scoringVersion, scoring, summary, scores, compliance, qualityGate, timeline, fixes, regenerationPrompts]
+      required: [analysisVersion, scoringVersion, scoring, summary, scores, compliance, qualityGate, timeline, coverage, fixes, regenerationPrompts]
       properties:
         analysisVersion:
           type: string
@@ -470,6 +500,37 @@ components:
           items:
             type: object
             additionalProperties: true
+        coverage:
+          type: object
+          required: [declaredDurationSeconds, observedThroughSeconds, coverageRatio, requiredCoverageRatio, fullDurationReviewed, timelineSegments]
+          description: Evidence that the returned timeline spans the declared clip duration. When durationSeconds was not supplied, duration-dependent fields may be null.
+          properties:
+            declaredDurationSeconds:
+              type: number
+              nullable: true
+            observedThroughSeconds:
+              type: number
+              minimum: 0
+            coverageRatio:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+            requiredCoverageRatio:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+            fullDurationReviewed:
+              type: boolean
+              nullable: true
+            timelineSegments:
+              type: integer
+              minimum: 0
+            minimumTimelineSegments:
+              type: integer
+              nullable: true
+              minimum: 1
         retentionRisks:
           type: array
           items:

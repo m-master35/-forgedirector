@@ -682,3 +682,182 @@ export function normalizeBriefEnrichment(value, request = {}) {
     resolvedBrief,
   };
 }
+
+
+function voiceoverForRole(role, subject, cta) {
+  const cleanSubject = cleanText(subject, 120).replace(/^(a|an|the)\s+/i, '');
+  if (role === 'hook') return `See ${cleanSubject} in action.`;
+  if (role === 'payoff') return cleanText(cta, 120) || 'See the next step clearly.';
+  if (role === 'proof') return 'Notice the detail that changes the result.';
+  return 'Watch the change happen.';
+}
+
+function deterministicBeatVisual({
+  role,
+  beat,
+  subject,
+  visualStyle,
+  continuity,
+}) {
+  const roleSpecific = role === 'hook'
+    ? 'Open on the most visually distinctive state immediately; do not spend time establishing the location.'
+    : role === 'payoff'
+      ? 'Show the resolved end state in a cleaner composition that visibly contrasts with the opening.'
+      : role === 'proof'
+        ? 'Reveal one new observable detail that has not appeared in the prior beat.'
+        : 'Show one concrete interaction or state change that moves the story forward.';
+
+  return [
+    `Subject: ${subject}.`,
+    `Beat: ${beat}.`,
+    roleSpecific,
+    `Visual style: ${visualStyle}.`,
+    `Continuity anchors: ${continuity}.`,
+  ].join(' ');
+}
+
+export function buildGuaranteedCampaign({
+  request = {},
+  briefEnrichment = null,
+  previousCampaign = null,
+  isRevision = false,
+} = {}) {
+  if (isRevision && previousCampaign) {
+    const preserved = clone(previousCampaign);
+    preserved.changeSummary = 'Returned the last validated campaign because the requested revision could not be improved without dropping below the production quality floor.';
+    return normalizeCampaignManifest(preserved, {
+      request,
+      previousCampaign,
+      isRevision: true,
+    });
+  }
+
+  const constraints = request.constraints || {};
+  const enrichment = briefEnrichment || normalizeBriefEnrichment({}, request) || {};
+  const subject = cleanText(enrichment.subject, 500) || 'a fictional focus timer app';
+  const visualStyle = cleanText(enrichment.visualStyle, 700)
+    || 'realistic mobile-first commercial imagery, restrained lighting, clean focal separation, physically plausible motion';
+  const continuity = cleanText(enrichment.continuity, 700)
+    || 'preserve the same subject or product, exact colors, environment, palette, props, and lighting direction across connected shots';
+  const hook = cleanText(enrichment.hook, 700)
+    || `Open immediately on the most visually distinctive state of ${subject}.`;
+  const sourceBeats = Array.isArray(enrichment.beats)
+    ? enrichment.beats.map((beat) => cleanText(beat, 700)).filter(Boolean)
+    : [];
+
+  const durationSeconds = normalizeDuration(constraints.durationSeconds, 15);
+  const count = sceneCountForDuration(durationSeconds);
+  const beats = [];
+  for (let index = 0; index < count; index += 1) {
+    if (index === 0) beats.push(hook);
+    else if (index === count - 1) {
+      beats.push(
+        sourceBeats[sourceBeats.length - 1]
+        || `Resolve on a clean hero/payoff frame for ${subject} with a neutral next step and no unsupported claims.`,
+      );
+    } else {
+      const sourceIndex = Math.min(index, Math.max(0, sourceBeats.length - 2));
+      beats.push(
+        sourceBeats[sourceIndex]
+        || `Show a concrete interaction, transformation, or observable state change involving ${subject}.`,
+      );
+    }
+  }
+
+  const rawScenes = Array.from({ length: count }, () => ({}));
+  const durations = allocateDurations(rawScenes, durationSeconds);
+  const aspectRatio = normalizeAspect(constraints.aspectRatio, '9:16');
+
+  const scenes = beats.map((beat, index) => {
+    const role = defaultSceneRole(index, count);
+    const visualDirection = deterministicBeatVisual({
+      role,
+      beat,
+      subject,
+      visualStyle,
+      continuity,
+    });
+    const generationPrompt = productionLock({
+      role,
+      visual: visualDirection,
+      aspectRatio,
+      continuityText: continuity,
+      index,
+      count,
+    });
+
+    return {
+      id: index + 1,
+      durationSeconds: durations[index],
+      visualDirection,
+      voiceover: safeVoiceover(
+        voiceoverForRole(role, subject, enrichment.cta),
+        role,
+        durations[index],
+      ),
+      generationPrompt,
+    };
+  });
+
+  return normalizeCampaignManifest({
+    summary: `A production-safe ${durationSeconds}-second short-form concept for ${subject}, using a strong opening hook, visible progression, and clean payoff.`,
+    audience: cleanText(enrichment.audience, 500)
+      || constraints.audience
+      || 'Broad mobile-first audience',
+    platform: normalizePlatform(constraints.platform, 'General'),
+    aspectRatio,
+    durationSeconds,
+    continuity: {
+      leadCharacter: null,
+      locked: true,
+    },
+    scenes,
+    changeSummary: 'Used ForgeDirector guaranteed-safe production blueprint after model candidates did not meet the quality floor.',
+  }, { request, previousCampaign, isRevision: false });
+}
+
+export function assessGuaranteedCampaign(campaign) {
+  const scenes = Array.isArray(campaign?.scenes) ? campaign.scenes : [];
+  const checks = {
+    hasScenes: scenes.length >= 2 && scenes.length <= 20,
+    durationValid: Number(campaign?.durationSeconds) >= 5
+      && Math.abs(
+        scenes.reduce((sum, scene) => sum + Number(scene?.durationSeconds || 0), 0)
+        - Number(campaign?.durationSeconds || 0)
+      ) <= 0.01,
+    continuityLocked: campaign?.continuity?.locked === true,
+    distinctVisuals: new Set(
+      scenes.map((scene) => normalizeMatchForQuality(scene?.visualDirection)),
+    ).size === scenes.length,
+    generationReady: scenes.every((scene) => {
+      const prompt = String(scene?.generationPrompt || '');
+      return prompt.length >= 300
+        && /camera path:|camera:/i.test(prompt)
+        && /lighting lock:|lighting:/i.test(prompt)
+        && /continuity lock:|continuity:/i.test(prompt)
+        && /progression cue:|progression:/i.test(prompt)
+        && /negative constraints:/i.test(prompt);
+    }),
+    sceneRoles: scenes.every((scene, index) => {
+      const role = defaultSceneRole(index, scenes.length);
+      const text = `${scene?.visualDirection || ''} ${scene?.generationPrompt || ''}`.toLowerCase();
+      if (role === 'hook') return /hook|opening|first frame|in medias res/.test(text);
+      if (role === 'payoff') return /payoff|resolved|end state|hero/.test(text);
+      return /development|proof|interaction|state change|new observable detail/.test(text);
+    }),
+  };
+
+  return {
+    passed: Object.values(checks).every(Boolean),
+    checks,
+    method: 'deterministic-production-blueprint-v1',
+  };
+}
+
+function normalizeMatchForQuality(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

@@ -614,12 +614,39 @@ export function applyRevisionPreservation(candidate, previousCampaign, instructi
 }
 
 
+function inferSubjectFromBrief(rawBrief, request = {}) {
+  const explicit = cleanText(
+    request?.constraints?.product || request?.constraints?.brand,
+    160,
+  );
+  if (explicit) return explicit;
+
+  const raw = cleanText(rawBrief, 1000);
+  if (!raw || looksLikeNoise(raw)) return 'a fictional focus timer app';
+  if (raw.length <= 120) return raw;
+
+  const patterns = [
+    /\b(?:for|about|featuring)\s+(?:a|an|the)?\s*([^.!?;,]{3,120})/i,
+    /\b(?:product|app|tool|service|device|object)\s+(?:called\s+)?([^.!?;,]{3,100})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match?.[1]) {
+      const candidate = cleanText(match[1], 120)
+        .replace(/\b(?:that|which|with)\b.*$/i, '')
+        .trim();
+      if (candidate.length >= 3) return candidate;
+    }
+  }
+
+  return 'the described product or concept';
+}
+
 export function normalizeBriefEnrichment(value, request = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
   const subject = cleanText(value.subject, 500)
-    || (request?.rawBrief && !looksLikeNoise(request.rawBrief) ? cleanText(request.rawBrief, 500) : '')
-    || 'a fictional focus timer app';
+    || inferSubjectFromBrief(request?.rawBrief, request);
   const objective = cleanText(value.objective, 500)
     || 'create a clear short-form story with an immediate visual hook and a memorable payoff';
   const audience = cleanText(value.audience, 500)

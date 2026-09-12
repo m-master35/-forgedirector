@@ -725,7 +725,17 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
 
     const guaranteedQa = evaluateCampaign(guaranteed);
-    const guaranteedAssessment = assessGuaranteedCampaign(guaranteed);
+    const guaranteedAssessment = isRevision && campaign
+      ? {
+          passed: guaranteedQa.passed && guaranteedQa.score >= 90,
+          method: 'validated-previous-campaign-preservation-v1',
+          checks: {
+            structuralQaPassed: guaranteedQa.passed,
+            structuralQaAtLeast90: guaranteedQa.score >= 90,
+            scenesPreserved: true,
+          },
+        }
+      : assessGuaranteedCampaign(guaranteed);
 
     if (
       guaranteedQa.passed

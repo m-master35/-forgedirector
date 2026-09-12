@@ -9,6 +9,7 @@ expectations = json.loads((root / "expectations.json").read_text())
 rows = []
 check_total = check_correct = 0
 speech_total = speech_clean = 0
+coverage_total = coverage_clean = 0
 technical_failures = []
 
 def get_check(analysis, expected):
@@ -65,6 +66,12 @@ for case in expectations["cases"]:
         if speech_ok:
             speech_clean += 1
 
+    coverage_total += 1
+    coverage = analysis.get("coverage") or {}
+    coverage_ok = coverage.get("fullDurationReviewed") is True
+    if coverage_ok:
+        coverage_clean += 1
+
     gate = analysis.get("qualityGate", {}).get("action")
     gate_ok = None
     expected_gate = case.get("gate")
@@ -78,6 +85,8 @@ for case in expectations["cases"]:
         "status": "OK",
         "checks": f"{checks_ok}/{checks_n}" if checks_n else "-",
         "speechClean": speech_ok,
+        "coverageOk": coverage_ok,
+        "coverage": coverage,
         "gate": gate,
         "gateOk": gate_ok,
         "overall": analysis.get("scores", {}).get("overall"),
@@ -117,6 +126,11 @@ summary = {
         "total": speech_total,
         "accuracy": round(speech_clean / speech_total, 4) if speech_total else None,
     },
+    "fullDurationCoverageChecks": {
+        "clean": coverage_clean,
+        "total": coverage_total,
+        "accuracy": round(coverage_clean / coverage_total, 4) if coverage_total else None,
+    },
     "qualityGateChecks": {
         "correct": gate_correct,
         "total": len(gate_assertions),
@@ -133,17 +147,19 @@ md.append("# ForgeDirector live video benchmark")
 md.append("")
 md.append(f"- Compliance accuracy: **{check_correct}/{check_total}**" + (f" ({check_correct/check_total:.0%})" if check_total else ""))
 md.append(f"- No-speech hallucination: **{speech_clean}/{speech_total}**" + (f" ({speech_clean/speech_total:.0%})" if speech_total else ""))
+md.append(f"- Full-duration coverage: **{coverage_clean}/{coverage_total}**" + (f" ({coverage_clean/coverage_total:.0%})" if coverage_total else ""))
 md.append(f"- Quality-gate assertions: **{gate_correct}/{len(gate_assertions)}**" + (f" ({gate_correct/len(gate_assertions):.0%})" if gate_assertions else ""))
 md.append(f"- Technical failures: **{len(technical_failures)}**")
 md.append("")
-md.append("| Case | Compliance | Gate | Overall | Hook | Platform fit | Speech clean |")
-md.append("|---|---:|---|---:|---:|---:|---|")
+md.append("| Case | Compliance | Gate | Overall | Hook | Platform fit | Speech clean | Full duration |")
+md.append("|---|---:|---|---:|---:|---:|---|---|")
 for r in rows:
     if r.get("status") != "OK":
-        md.append(f"| {r['name']} | TECH FAIL | - | - | - | - | - |")
+        md.append(f"| {r['name']} | TECH FAIL | - | - | - | - | - | - |")
         continue
     speech = "-" if r.get("speechClean") is None else ("yes" if r["speechClean"] else "NO")
-    md.append(f"| {r['name']} | {r['checks']} | {r.get('gate')} | {r.get('overall')} | {r.get('hook')} | {r.get('platformFit')} | {speech} |")
+    coverage_text = "yes" if r.get("coverageOk") else "NO"
+    md.append(f"| {r['name']} | {r['checks']} | {r.get('gate')} | {r.get('overall')} | {r.get('hook')} | {r.get('platformFit')} | {speech} | {coverage_text} |")
 
 md.append("")
 md.append("## Case observations")
@@ -158,6 +174,7 @@ for r in rows:
     md.append(f"- Summary: {summary_text or '(empty)'}")
     md.append(f"- CTA: {cta_text}")
     md.append(f"- Limitations: {limitations_text or '(none)'}")
+    md.append(f"- Coverage: {json.dumps(r.get('coverage', {}), ensure_ascii=False)}")
     md.append(f"- Timeline: {timeline_text}")
 
 if relational:
@@ -192,6 +209,8 @@ if check_total and check_correct != check_total:
     release_failures.append(f"compliance accuracy {check_correct}/{check_total}")
 if speech_total and speech_clean != speech_total:
     release_failures.append(f"speech-hallucination cleanliness {speech_clean}/{speech_total}")
+if coverage_total and coverage_clean != coverage_total:
+    release_failures.append(f"full-duration coverage {coverage_clean}/{coverage_total}")
 if gate_assertions and gate_correct != len(gate_assertions):
     release_failures.append(f"quality-gate assertions {gate_correct}/{len(gate_assertions)}")
 for item in relational:
@@ -207,5 +226,5 @@ if release_failures:
     sys.exit(2)
 
 print("\n## RELEASE GATE PASSED")
-print("- All technical, compliance, no-speech, quality-gate, and relational checks passed.")
+print("- All technical, compliance, no-speech, full-duration coverage, quality-gate, and relational checks passed.")
 sys.exit(0)

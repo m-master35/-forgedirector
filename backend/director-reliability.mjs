@@ -224,12 +224,20 @@ function allocateDurations(rawScenes, totalDuration) {
   return durations;
 }
 
-function safeVoiceover(value, role) {
-  const text = cleanText(value, 500);
-  if (text) return text;
-  if (role === 'hook') return 'Start with what matters.';
-  if (role === 'payoff') return 'Make the next step clear.';
-  return 'Keep the story moving.';
+function safeVoiceover(value, role, durationSeconds) {
+  let text = cleanText(value, 500);
+  if (!text) {
+    if (role === 'hook') text = 'Start with what matters.';
+    else if (role === 'payoff') text = 'Make the next step clear.';
+    else text = 'Keep the story moving.';
+  }
+
+  const maxWords = Math.max(4, Math.floor(Number(durationSeconds || 0) * 2.6));
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+
+  const trimmed = words.slice(0, maxWords).join(' ').replace(/[,:;\-]+$/, '');
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
 function defaultVisual(role, brief) {
@@ -305,7 +313,14 @@ export function normalizeCampaignManifest(candidate, {
     const generationPrompt = cleanText(scene.generationPrompt, 4000)
       || generatorPrompt({ role, visual: visualDirection, aspectRatio, continuityText });
 
-    const enrichedGenerationPrompt = generationPrompt.length < 120
+    const detailPatterns = [
+      /camera|shot|frame|close[- ]?up|wide|medium|macro|push|pull|pan|tilt|orbit|dolly|tracking/i,
+      /light|lighting|shadow|exposure|backlit|softbox|sun|neon|practical/i,
+      /move|motion|walk|turn|reach|pour|open|reveal|enter|exit|action|transition/i,
+    ];
+    const detailCount = detailPatterns.filter((pattern) => pattern.test(generationPrompt)).length;
+    const needsProductionEnrichment = generationPrompt.length < 120 || detailCount < 2;
+    const enrichedGenerationPrompt = needsProductionEnrichment
       ? `${generationPrompt} ${generatorPrompt({ role, visual: visualDirection, aspectRatio, continuityText })}`
       : generationPrompt;
 
@@ -313,9 +328,22 @@ export function normalizeCampaignManifest(candidate, {
       id: index + 1,
       durationSeconds: durations[index],
       visualDirection,
-      voiceover: safeVoiceover(scene.voiceover, role),
+      voiceover: safeVoiceover(scene.voiceover, role, durations[index]),
       generationPrompt: enrichedGenerationPrompt.slice(0, 4000),
     };
+  });
+
+  const seenPrompts = new Set();
+  scenes = scenes.map((scene, index) => {
+    const key = scene.generationPrompt.trim().toLowerCase();
+    if (!seenPrompts.has(key)) {
+      seenPrompts.add(key);
+      return scene;
+    }
+    const role = defaultSceneRole(index, scenes.length);
+    const generationPrompt = `${scene.generationPrompt} Scene-specific beat: ${role}; make the action and composition visibly distinct from the preceding scene while preserving continuity.`.slice(0, 4000);
+    seenPrompts.add(generationPrompt.toLowerCase());
+    return { ...scene, generationPrompt };
   });
 
   return {

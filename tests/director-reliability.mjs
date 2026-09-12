@@ -405,6 +405,7 @@ const guaranteedRevision = buildGuaranteedCampaign({
   isRevision: true,
 });
 assert.deepEqual(guaranteedRevision.scenes, previous.scenes);
-assert.equal(assessGuaranteedCampaign(guaranteedRevision).passed, true);
+assert.equal(evaluateCampaign(guaranteedRevision).passed, true);
+assert.ok(evaluateCampaign(guaranteedRevision).score >= 90);
 
 console.log('Director reliability tests passed');

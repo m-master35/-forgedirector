@@ -1231,6 +1231,34 @@ async function invokeVideoAnalysis({ asset, payload }) {
       },
     }));
 
+    const isRetryableComplianceError = (error) => {
+      const name = String(error?.name || error?.Code || '');
+      const status = Number(error?.$metadata?.httpStatusCode || 0);
+      return [
+        'ThrottlingException',
+        'ServiceUnavailableException',
+        'InternalServerException',
+        'ModelTimeoutException',
+        'ModelNotReadyException',
+        'ModelErrorException',
+      ].includes(name) || (status >= 500 && status <= 599) || status === 424;
+    };
+
+    const invokeComplianceWithRetry = async (modelId, promptText) => {
+      let lastError;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          return await invokeComplianceOnce(modelId, promptText);
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableComplianceError(error) || attempt === 2) throw error;
+          complianceVerificationRetryUsed = true;
+          await new Promise((resolve) => setTimeout(resolve, 400 * (2 ** attempt)));
+        }
+      }
+      throw lastError;
+    };
+
     const complianceModels = [...new Set([
       VIDEO_FALLBACK_MODEL_ID,
       MODEL_ID,
@@ -1259,14 +1287,14 @@ async function invokeVideoAnalysis({ asset, payload }) {
       let verifierResult = null;
 
       try {
-        verifierResult = await invokeComplianceOnce(verifierModelId, compliancePrompt);
+        verifierResult = await invokeComplianceWithRetry(verifierModelId, compliancePrompt);
         recordVerifierUsage(verifierResult);
         verifierParsed = parseVideoAnalysisModelJson(extractText(verifierResult));
 
         if (!verifierParsed) {
           complianceVerificationRetryUsed = true;
           const recoveryPrompt = `${compliancePrompt}\n\nJSON RECOVERY: Return the required JSON object only. Keep your independently observed compliance verdicts and visual evidence. Do not add markdown or commentary.`;
-          const recoveryResult = await invokeComplianceOnce(verifierModelId, recoveryPrompt);
+          const recoveryResult = await invokeComplianceWithRetry(verifierModelId, recoveryPrompt);
           recordVerifierUsage(recoveryResult);
           verifierParsed = parseVideoAnalysisModelJson(extractText(recoveryResult));
           verifierResult = recoveryResult;
@@ -1298,7 +1326,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
           const coverageRecoveryPrompt = `${compliancePrompt}\n\nFULL-DURATION VERIFIER RECOVERY: Your previous timeline did not prove inspection of at least 95% of the declared ${declaredDurationSeconds}-second clip. Reinspect the video from near 0 seconds through the final 5%, cover the middle contiguously, and then re-evaluate every requirement from observable evidence only. Return the required JSON object only.`;
 
           try {
-            const coverageRecoveryResult = await invokeComplianceOnce(
+            const coverageRecoveryResult = await invokeComplianceWithRetry(
               verifierModelId,
               coverageRecoveryPrompt,
             );
@@ -1368,9 +1396,13 @@ async function invokeVideoAnalysis({ asset, payload }) {
                   ? 'compliance_verifier_model_timeout'
                   : name === 'ServiceUnavailableException'
                     ? 'compliance_verifier_model_unavailable'
-                    : status >= 500
-                      ? 'compliance_verifier_model_5xx'
-                      : 'compliance_verifier_model_error'
+                    : name === 'ModelNotReadyException'
+                      ? 'compliance_verifier_model_not_ready'
+                      : name === 'ModelErrorException' || status === 424
+                        ? 'compliance_verifier_model_execution'
+                        : status >= 500
+                          ? 'compliance_verifier_model_5xx'
+                          : 'compliance_verifier_model_error'
           );
         lastVerifierError = error;
         complianceVerificationRetryUsed = true;

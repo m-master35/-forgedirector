@@ -29,11 +29,18 @@ function assetKey(assetId) {
   return `${VIDEO_PREFIX}/${assertAssetId(assetId)}`;
 }
 
-export async function createVideoUpload({ assetId, contentType }) {
+export async function createVideoUpload({ assetId, contentType, sizeBytes }) {
   const bucket = requireBucket();
   const format = videoFormatFromContentType(contentType);
   if (!format) {
     const error = new Error('Unsupported video contentType. Use video/mp4, video/quicktime, video/x-matroska, or video/webm.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const declaredSize = Number(sizeBytes);
+  if (!Number.isInteger(declaredSize) || declaredSize <= 0 || declaredSize > MAX_VIDEO_BYTES) {
+    const error = new Error(`sizeBytes must be an integer between 1 and ${MAX_VIDEO_BYTES}.`);
     error.statusCode = 400;
     throw error;
   }
@@ -44,6 +51,7 @@ export async function createVideoUpload({ assetId, contentType }) {
     Bucket: bucket,
     Key: key,
     ContentType: normalizedContentType,
+    ContentLength: declaredSize,
     Metadata: {
       purpose: 'forgedirector-video-analysis',
     },
@@ -57,6 +65,7 @@ export async function createVideoUpload({ assetId, contentType }) {
     method: 'PUT',
     headers: {
       'content-type': normalizedContentType,
+      'content-length': String(declaredSize),
     },
     expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
     maxBytes: MAX_VIDEO_BYTES,

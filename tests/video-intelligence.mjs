@@ -184,6 +184,55 @@ assert.equal(evidenceDerived.compliance.checks.find((x) => x.type === 'mustInclu
 assert.equal(evidenceDerived.compliance.checks.find((x) => x.type === 'mustNotShow').status, 'pass');
 assert.equal(evidenceDerived.compliance.checks.find((x) => x.type === 'ctaRequired').status, 'pass');
 
+const negatedRequiredText = normalizeVideoAnalysis({
+  scores: {
+    hook: 70, pacing: 70, clarity: 70, visualQuality: 70,
+    continuity: 70, cta: 50, platformFit: 70, conversionReadiness: 50,
+  },
+  timeline: [{
+    startSeconds: 0,
+    endSeconds: 6,
+    purpose: 'other',
+    visual: 'Dark title card.',
+    onScreenText: 'RIVAL\nNOT START FREE',
+    issues: [],
+  }],
+  compliance: {
+    checks: [{
+      type: 'mustIncludeText',
+      rule: 'START FREE',
+      status: 'pass',
+      evidence: 'The model incorrectly treated the negated phrase as satisfying the requirement.',
+      timestampSeconds: 0,
+    }],
+  },
+}, {
+  requirements: {
+    mustIncludeText: ['START FREE'],
+  },
+});
+assert.equal(negatedRequiredText.compliance.checks[0].status, 'fail');
+
+const embeddedPositiveRequiredText = normalizeVideoAnalysis({
+  scores: {
+    hook: 70, pacing: 70, clarity: 70, visualQuality: 70,
+    continuity: 70, cta: 50, platformFit: 70, conversionReadiness: 50,
+  },
+  timeline: [{
+    startSeconds: 0,
+    endSeconds: 6,
+    purpose: 'cta',
+    visual: 'Runner with a platform message.',
+    onScreenText: 'Run AI with an API. Use Replicate',
+    issues: [],
+  }],
+}, {
+  requirements: {
+    mustIncludeText: ['Replicate'],
+  },
+});
+assert.equal(embeddedPositiveRequiredText.compliance.checks[0].status, 'pass');
+
 const forbiddenDerived = normalizeVideoAnalysis({
   scores: {
     hook: 70, pacing: 70, clarity: 70, visualQuality: 70,

@@ -771,6 +771,11 @@ export function buildGuaranteedCampaign({
   const durationSeconds = normalizeDuration(constraints.durationSeconds, 15);
   const count = sceneCountForDuration(durationSeconds);
   const beats = [];
+  const middleStageCues = [
+    'Stage focus: introduce the primary interaction or first observable change; show cause and effect clearly.',
+    'Stage focus: reveal a second, different observable state or detail that proves the story is progressing.',
+    'Stage focus: widen or reframe to show the consequence/context of the earlier interaction before the payoff.',
+  ];
   for (let index = 0; index < count; index += 1) {
     if (index === 0) beats.push(hook);
     else if (index === count - 1) {
@@ -780,10 +785,10 @@ export function buildGuaranteedCampaign({
       );
     } else {
       const sourceIndex = Math.min(index, Math.max(0, sourceBeats.length - 2));
-      beats.push(
-        sourceBeats[sourceIndex]
-        || `Show a concrete interaction, transformation, or observable state change involving ${subject}.`,
-      );
+      const sourceBeat = sourceBeats[sourceIndex]
+        || `Show a concrete interaction, transformation, or observable state change involving ${subject}.`;
+      const stageCue = middleStageCues[(index - 1) % middleStageCues.length];
+      beats.push(`${sourceBeat} ${stageCue} Sequence position ${index + 1} of ${count}.`);
     }
   }
 

@@ -239,6 +239,30 @@ function authorized(event, path) {
 }
 
 async function invokeDirector({ message, campaign, request, isRevision = false }) {
+  let modelServiceDegraded = false;
+  let modelCallCount = 0;
+  const MAX_MODEL_CALLS = 8;
+  const markModelCall = () => {
+    modelCallCount += 1;
+    if (modelCallCount > MAX_MODEL_CALLS) {
+      const error = new Error('ForgeDirector model-call budget exhausted for this request.');
+      error.name = 'ModelCallBudgetExceeded';
+      throw error;
+    }
+  };
+  const isRetryableModelError = (error) => {
+    const retryable = new Set([
+      'ThrottlingException',
+      'ServiceUnavailableException',
+      'InternalServerException',
+      'ModelTimeoutException',
+      'ModelNotReadyException',
+    ]);
+    const name = String(error?.name || error?.Code || '');
+    const status = Number(error?.$metadata?.httpStatusCode || 0);
+    return retryable.has(name) || (status >= 500 && status <= 599);
+  };
+
   if (!MODEL_ID) {
     const fallbackCampaign = buildDeterministicFallbackCampaign({
       request,
@@ -255,7 +279,9 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     };
   }
 
-  const invokeOnce = async (modelId, promptText) => client.send(new ConverseCommand({
+  const invokeOnce = async (modelId, promptText) => {
+    markModelCall();
+    return client.send(new ConverseCommand({
     modelId,
     system: [{ text: SYSTEM_PROMPT }],
     messages: [{
@@ -268,23 +294,15 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       topP: 0.9,
     },
   }));
+  };
 
   const sendDirector = async (modelId, promptText) => {
-    const retryable = new Set([
-      'ThrottlingException',
-      'ServiceUnavailableException',
-      'InternalServerException',
-      'ModelTimeoutException',
-      'ModelNotReadyException',
-    ]);
-
     try {
       return await invokeOnce(modelId, promptText);
     } catch (error) {
-      const name = String(error?.name || error?.Code || '');
-      const status = Number(error?.$metadata?.httpStatusCode || 0);
-      if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      if (!isRetryableModelError(error)) throw error;
+      modelServiceDegraded = true;
+      await new Promise((resolve) => setTimeout(resolve, 350));
       return invokeOnce(modelId, promptText);
     }
   };
@@ -292,7 +310,9 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   const runCreativeCritic = async (candidate) => {
     if (!MODEL_ID) return { critique: null, usage: null, modelId: null };
 
-    const invokeCriticOnce = async (modelId) => client.send(new ConverseCommand({
+    const invokeCriticOnce = async (modelId) => {
+      markModelCall();
+      return client.send(new ConverseCommand({
       modelId,
       system: [{ text: CRITIC_SYSTEM_PROMPT }],
       messages: [{
@@ -311,17 +331,9 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       try {
         criticResult = await invokeCriticOnce(modelId);
       } catch (error) {
-        const name = String(error?.name || error?.Code || '');
-        const status = Number(error?.$metadata?.httpStatusCode || 0);
-        const retryable = new Set([
-          'ThrottlingException',
-          'ServiceUnavailableException',
-          'InternalServerException',
-          'ModelTimeoutException',
-          'ModelNotReadyException',
-        ]);
-        if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (!isRetryableModelError(error)) throw error;
+        modelServiceDegraded = true;
+        await new Promise((resolve) => setTimeout(resolve, 300));
         criticResult = await invokeCriticOnce(modelId);
       }
 
@@ -342,7 +354,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
 
     const needsSecondOpinion = !first?.critique || critiqueNeedsRepair(first.critique);
     if (
-      needsSecondOpinion
+      !modelServiceDegraded
+      && needsSecondOpinion
       && VIDEO_FALLBACK_MODEL_ID
       && VIDEO_FALLBACK_MODEL_ID !== MODEL_ID
     ) {
@@ -441,7 +454,14 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
 
     for (const modelId of [...new Set(models)]) {
       try {
-        const enrichResult = await enrichWithModel(modelId);
+        let enrichResult;
+        try {
+          markModelCall();
+          enrichResult = await enrichWithModel(modelId);
+        } catch (error) {
+          if (isRetryableModelError(error)) modelServiceDegraded = true;
+          throw error;
+        }
         const parsedEnrichment = parseDirectorJson(extractText(enrichResult));
         const normalizedEnrichment = normalizeBriefEnrichment(parsedEnrichment, request);
         if (normalizedEnrichment) {
@@ -522,7 +542,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     creativeCritique = null;
   }
 
-  if (!parsed || !qa.passed || qa.score < 90 || (creativeCritique && critiqueNeedsRepair(creativeCritique))) {
+  if (!modelServiceDegraded && (!parsed || !qa.passed || qa.score < 90 || (creativeCritique && critiqueNeedsRepair(creativeCritique)))) {
     repairUsed = true;
     const repairPrompt = buildDirectorRepairPrompt({
       originalMessage: message,
@@ -588,7 +608,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
-  if (creativeCritique && critiqueNeedsRepair(creativeCritique)) {
+  if (!modelServiceDegraded && creativeCritique && critiqueNeedsRepair(creativeCritique)) {
     rescueRewriteUsed = true;
     const rescuePrompt = buildDirectorRepairPrompt({
       originalMessage: message,
@@ -647,7 +667,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
-  if (!creativeCritique || critiqueNeedsRepair(creativeCritique)) {
+  if (!modelServiceDegraded && (!creativeCritique || critiqueNeedsRepair(creativeCritique))) {
     candidateTournamentUsed = true;
     const tournamentModel = VIDEO_FALLBACK_MODEL_ID || usedModelId;
     const variants = [
@@ -729,6 +749,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       let fallbackCritique = null;
       let fallbackCriticUsage = null;
       try {
+        if (modelServiceDegraded) throw new Error('skip critic while model service is degraded');
         const criticResult = await runCreativeCritic(fallbackCandidate);
         fallbackCritique = criticResult.critique;
         fallbackCriticUsage = criticResult.usage;
@@ -759,7 +780,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     || !creativeCritique
     || critiqueNeedsRepair(creativeCritique)
   ) {
-    if (!isRevision && !briefEnrichment && MODEL_ID) {
+    if (!modelServiceDegraded && !isRevision && !briefEnrichment && MODEL_ID) {
       const finalEnrichmentModels = [
         VIDEO_FALLBACK_MODEL_ID,
         MODEL_ID,
@@ -837,6 +858,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       // model critic as advisory metadata if it exists rather than allowing a
       // stochastic critic disagreement to turn a safe result into an outage.
       try {
+        if (modelServiceDegraded) throw new Error('skip advisory critic while model service is degraded');
         const criticResult = await runCreativeCritic(guaranteed);
         if (criticResult.critique) {
           creativeCritique = criticResult.critique;
@@ -879,6 +901,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       initialQa,
       creativeCritique,
       criticUsage,
+      modelServiceDegraded,
+      modelCallCount,
     };
   } catch {
     degradedFallbackUsed = true;
@@ -904,6 +928,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       initialQa,
       creativeCritique,
       criticUsage,
+      modelServiceDegraded,
+      modelCallCount,
     };
   }
 }
@@ -974,8 +1000,9 @@ async function invokeVideoAnalysis({ asset, payload }) {
       maxTokens: 5000,
       temperature: 0.1,
       topP: 0.9,
-    },
-  }));
+      },
+    }));
+    };
 
   const sendAnalysis = async (modelId, promptText) => {
     const retryable = new Set([
@@ -1214,6 +1241,21 @@ export const handler = async (event) => {
           initialQaScore: result.initialQa?.score ?? null,
           finalQaScore: qa.score,
           creativeQuality: result.creativeCritique,
+          qualityGate: result.guaranteedBlueprintUsed
+            ? {
+                passed: result.guaranteedBlueprintAssessment?.passed === true,
+                method: result.guaranteedBlueprintAssessment?.method || 'deterministic-production-blueprint-v1',
+                structuralQa: qa.score,
+                criticAdvisoryScore: result.creativeCritique?.score ?? null,
+              }
+            : {
+                passed: result.creativeCritique?.passed === true && qa.passed && qa.score >= 90,
+                method: 'semantic-critic-v1',
+                structuralQa: qa.score,
+                creativeScore: result.creativeCritique?.score ?? null,
+              },
+          modelServiceDegraded: result.modelServiceDegraded,
+          modelCallCount: result.modelCallCount,
           criticUsage: result.criticUsage,
           requestId,
         },
@@ -1260,6 +1302,21 @@ export const handler = async (event) => {
           initialQaScore: result.initialQa?.score ?? null,
           finalQaScore: qa.score,
           creativeQuality: result.creativeCritique,
+          qualityGate: result.guaranteedBlueprintUsed
+            ? {
+                passed: result.guaranteedBlueprintAssessment?.passed === true,
+                method: result.guaranteedBlueprintAssessment?.method || 'deterministic-production-blueprint-v1',
+                structuralQa: qa.score,
+                criticAdvisoryScore: result.creativeCritique?.score ?? null,
+              }
+            : {
+                passed: result.creativeCritique?.passed === true && qa.passed && qa.score >= 90,
+                method: 'semantic-critic-v1',
+                structuralQa: qa.score,
+                creativeScore: result.creativeCritique?.score ?? null,
+              },
+          modelServiceDegraded: result.modelServiceDegraded,
+          modelCallCount: result.modelCallCount,
           criticUsage: result.criticUsage,
           requestId,
         },

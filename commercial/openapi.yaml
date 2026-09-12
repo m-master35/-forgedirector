@@ -587,6 +587,10 @@ components:
             modelCallCount:
               type: integer
               minimum: 0
+            requestUsage:
+              $ref: '#/components/schemas/RequestUsage'
+            claimSafety:
+              $ref: '#/components/schemas/ClaimSafetyAssessment'
             initialQaScore:
               type: number
               nullable: true
@@ -659,6 +663,44 @@ components:
           type: string
         generationPrompt:
           type: string
+
+    RequestUsage:
+      type: object
+      required: [modelCalls, inputTokens, outputTokens, totalTokens]
+      description: Aggregate Bedrock usage across all director, Brief Doctor, critic, repair, rescue, and candidate-selection calls made for this API request.
+      properties:
+        modelCalls:
+          type: integer
+          minimum: 0
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        totalTokens:
+          type: integer
+          minimum: 0
+
+    ClaimSafetyAssessment:
+      type: object
+      required: [passed, sensitive, categories, issues]
+      description: Deterministic final scan for invented outcome, medical, financial, comparative, guarantee, and performance claims in claim-sensitive categories.
+      properties:
+        passed:
+          type: boolean
+        sensitive:
+          type: boolean
+        categories:
+          type: array
+          items:
+            type: string
+            enum: [ingestible_wellness, medical_health, financial]
+        issues:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
 
     CreativeQuality:
       type: object

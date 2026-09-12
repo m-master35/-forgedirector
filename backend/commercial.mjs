@@ -4,6 +4,8 @@ import {
   buildUserPrompt,
   CRITIC_SYSTEM_PROMPT,
   buildCriticPrompt,
+  BRIEF_ENRICHER_SYSTEM_PROMPT,
+  buildBriefEnricherPrompt,
 } from './director-prompt.mjs';
 import { evaluateCampaign } from './qa.mjs';
 import { createVideoUpload, deleteVideoAsset, resolveVideoAsset } from './storage.mjs';
@@ -21,6 +23,7 @@ import {
   normalizeCreativeCritique,
   critiqueNeedsRepair,
   applyRevisionPreservation,
+  normalizeBriefEnrichment,
 } from './director-reliability.mjs';
 
 const client = new BedrockRuntimeClient({
@@ -348,6 +351,47 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     return first || { critique: null, usage: null, modelId: null };
   };
 
+  let briefEnrichment = null;
+  let briefEnrichmentUsed = false;
+
+  if (!isRevision && request?.quality?.tier !== 'good' && MODEL_ID) {
+    const enrichWithModel = async (modelId) => client.send(new ConverseCommand({
+      modelId,
+      system: [{ text: BRIEF_ENRICHER_SYSTEM_PROMPT }],
+      messages: [{
+        role: 'user',
+        content: [{ text: buildBriefEnricherPrompt({ request }) }],
+      }],
+      inferenceConfig: {
+        maxTokens: 1500,
+        temperature: 0.15,
+        topP: 0.9,
+      },
+    }));
+
+    const models = request?.quality?.tier === 'poor' && VIDEO_FALLBACK_MODEL_ID
+      ? [VIDEO_FALLBACK_MODEL_ID, MODEL_ID]
+      : [MODEL_ID, VIDEO_FALLBACK_MODEL_ID].filter(Boolean);
+
+    for (const modelId of [...new Set(models)]) {
+      try {
+        const enrichResult = await enrichWithModel(modelId);
+        const parsedEnrichment = parseDirectorJson(extractText(enrichResult));
+        const normalizedEnrichment = normalizeBriefEnrichment(parsedEnrichment, request);
+        if (normalizedEnrichment) {
+          briefEnrichment = normalizedEnrichment;
+          briefEnrichmentUsed = true;
+          request.enrichedBrief = normalizedEnrichment.resolvedBrief;
+          message = planMessage(request);
+          break;
+        }
+      } catch {
+        // Continue to the next available model; deterministic recovery defaults
+        // remain available if brief enrichment cannot be produced.
+      }
+    }
+  }
+
   const preferredModel = request?.quality?.tier === 'poor' && VIDEO_FALLBACK_MODEL_ID
     ? VIDEO_FALLBACK_MODEL_ID
     : MODEL_ID;
@@ -550,6 +594,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       usage: result?.usage || null,
       repairUsed,
       rescueRewriteUsed,
+      briefEnrichmentUsed,
+      briefEnrichment,
       degradedFallbackUsed,
       modelId: usedModelId,
       initialQa,
@@ -568,6 +614,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       usage: result?.usage || null,
       repairUsed,
       rescueRewriteUsed,
+      briefEnrichmentUsed,
+      briefEnrichment,
       degradedFallbackUsed,
       modelId: usedModelId,
       initialQa,

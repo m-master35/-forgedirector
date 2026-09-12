@@ -3,6 +3,8 @@ import {
   assertAssetId,
   buildVideoAnalysisPrompt,
   normalizeVideoAnalysis,
+  normalizeVideoCompliance,
+  applyVerifiedVideoCompliance,
   assessVideoAnalysisCoverage,
   videoFormatFromContentType,
 } from '../backend/video-intelligence.mjs';

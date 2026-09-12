@@ -407,6 +407,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   let qa = evaluateCampaign(normalized);
   const initialQa = qa;
   let repairUsed = false;
+  let rescueRewriteUsed = false;
   let creativeCritique = null;
   let criticUsage = null;
 
@@ -484,11 +485,71 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
+  if (creativeCritique && critiqueNeedsRepair(creativeCritique)) {
+    rescueRewriteUsed = true;
+    const rescuePrompt = buildDirectorRepairPrompt({
+      originalMessage: message,
+      candidate: normalized,
+      qa,
+      creativeCritic: creativeCritique,
+      previousCampaign: campaign,
+    });
+    const rescueModel = VIDEO_FALLBACK_MODEL_ID || usedModelId;
+
+    try {
+      const rescueResult = await sendDirector(rescueModel, `${rescuePrompt}\n\nFINAL QUALITY PASS: Rewrite the manifest so every creative-critic weakness is concretely resolved. Favor specificity, a stronger first-two-second visual hook, visibly distinct scene progression, generator-ready camera/lighting/motion direction, strict continuity, and restrained claims. Return the full JSON manifest only.`);
+      const rescueParsed = parseDirectorJson(extractText(rescueResult));
+      if (rescueParsed) {
+        let rescueCandidate = normalizeCampaignManifest(rescueParsed, {
+          request,
+          previousCampaign: campaign,
+          isRevision,
+        });
+        if (isRevision && campaign) {
+          rescueCandidate = applyRevisionPreservation(rescueCandidate, campaign, request?.rawBrief || '');
+        }
+
+        const rescueQa = evaluateCampaign(rescueCandidate);
+        let rescueCritique = null;
+        let rescueCriticUsage = null;
+        try {
+          const criticResult = await runCreativeCritic(rescueCandidate);
+          rescueCritique = criticResult.critique;
+          rescueCriticUsage = criticResult.usage;
+        } catch {
+          rescueCritique = null;
+        }
+
+        const currentScore = creativeCritique?.score ?? 0;
+        const rescueScore = rescueCritique?.score ?? 0;
+        if (
+          rescueQa.passed
+          && rescueQa.score >= qa.score
+          && rescueCritique
+          && (
+            rescueCritique.passed
+            || rescueScore > currentScore
+          )
+        ) {
+          normalized = rescueCandidate;
+          qa = rescueQa;
+          result = rescueResult;
+          usedModelId = rescueModel;
+          creativeCritique = rescueCritique;
+          if (rescueCriticUsage) criticUsage = rescueCriticUsage;
+        }
+      }
+    } catch {
+      // Keep the best validated candidate from the earlier passes.
+    }
+  }
+
   try {
     return {
       campaign: validateManifest(normalized),
       usage: result?.usage || null,
       repairUsed,
+      rescueRewriteUsed,
       degradedFallbackUsed,
       modelId: usedModelId,
       initialQa,
@@ -506,6 +567,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       campaign: validateManifest(fallbackCampaign),
       usage: result?.usage || null,
       repairUsed,
+      rescueRewriteUsed,
       degradedFallbackUsed,
       modelId: usedModelId,
       initialQa,

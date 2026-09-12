@@ -723,6 +723,7 @@ export function normalizeVideoAnalysis(value, {
   objective = 'engagement',
   requirements = {},
   hasTranscript = false,
+  declaredDurationSeconds = null,
 } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Video analysis model returned an invalid JSON object.');
@@ -768,7 +769,7 @@ export function normalizeVideoAnalysis(value, {
     qualityGate: qualityGate(scores, retentionRisks, fixes, compliance),
     hook: normalizeHook(value.hook, hasTranscript),
     timeline,
-    coverage: assessVideoAnalysisCoverage({ timeline }, null),
+    coverage: assessVideoAnalysisCoverage({ timeline }, declaredDurationSeconds),
     retentionRisks,
     continuity: value.continuity && typeof value.continuity === 'object' ? value.continuity : {},
     cta: value.cta && typeof value.cta === 'object' ? value.cta : {},

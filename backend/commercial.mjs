@@ -703,15 +703,20 @@ async function invokeVideoAnalysis({ asset, payload }) {
       'ModelNotReadyException',
     ]);
 
-    try {
-      return await invokeAnalysisOnce(modelId, promptText);
-    } catch (error) {
-      const name = String(error?.name || error?.Code || '');
-      const status = Number(error?.$metadata?.httpStatusCode || 0);
-      if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      return invokeAnalysisOnce(modelId, promptText);
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await invokeAnalysisOnce(modelId, promptText);
+      } catch (error) {
+        lastError = error;
+        const name = String(error?.name || error?.Code || '');
+        const status = Number(error?.$metadata?.httpStatusCode || 0);
+        const canRetry = retryable.has(name) || (status >= 500 && status <= 599);
+        if (!canRetry || attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
+      }
     }
+    throw lastError;
   };
 
   const continuitySensitive = Array.isArray(requirements?.continuityRules)
@@ -720,10 +725,27 @@ async function invokeVideoAnalysis({ asset, payload }) {
     ? VIDEO_FALLBACK_MODEL_ID
     : MODEL_ID;
   let fallbackUsed = usedModelId !== MODEL_ID;
-  let result = await sendAnalysis(usedModelId, prompt);
+  let retryUsed = false;
+  let result;
+
+  try {
+    result = await sendAnalysis(usedModelId, prompt);
+  } catch (primaryError) {
+    if (
+      VIDEO_FALLBACK_MODEL_ID
+      && VIDEO_FALLBACK_MODEL_ID !== usedModelId
+    ) {
+      retryUsed = true;
+      usedModelId = VIDEO_FALLBACK_MODEL_ID;
+      fallbackUsed = true;
+      result = await sendAnalysis(usedModelId, prompt);
+    } else {
+      throw primaryError;
+    }
+  }
+
   let rawText = extractText(result);
   let parsed = parseVideoAnalysisModelJson(rawText);
-  let retryUsed = false;
 
   if (!hasSubstantiveVideoAnalysis(parsed)) {
     retryUsed = true;

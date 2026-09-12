@@ -210,7 +210,7 @@ def assert_result(case, status, data):
         errors.append(f"qa.score={qa.get('score')}")
     if creative.get("passed") is not True:
         errors.append(f"creative.passed={creative.get('passed')}")
-    if int(creative.get("score") or 0) < 82:
+    if int(creative.get("score") or 0) < 86:
         errors.append(f"creative.score={creative.get('score')}")
     if creative.get("blockingIssues"):
         errors.append(f"creative blockers={creative.get('blockingIssues')}")
@@ -262,8 +262,18 @@ def assert_result(case, status, data):
 
     output = flatten_campaign(campaign)
     for forbidden in case.get("forbidOutput") or []:
-        if forbidden.lower() in output:
-            errors.append(f"forbidden phrase appeared: {forbidden}")
+        needle = forbidden.lower()
+        start = 0
+        while True:
+            idx = output.find(needle, start)
+            if idx < 0:
+                break
+            before = output[max(0, idx - 80):idx]
+            negated = bool(re.search(r"(?:do not|don't|dont|avoid|without|never|no|not|must not|should not)\\s+(?:\\w+\\s+){0,6}$", before))
+            if not negated:
+                errors.append(f"forbidden affirmative phrase appeared: {forbidden}")
+                break
+            start = idx + len(needle)
 
     if "todo" in output or "placeholder" in output:
         errors.append("placeholder language leaked")
@@ -370,7 +380,7 @@ for spec in VARIANCE_CASES:
         "uniqueOutputs": len(set(signatures)),
         "errors": run_errors,
     }
-    if row["minCreative"] is None or row["minCreative"] < 82:
+    if row["minCreative"] is None or row["minCreative"] < 86:
         run_errors.append(f"minimum creative score below threshold: {row['minCreative']}")
     if row["minQa"] is None or row["minQa"] < 90:
         run_errors.append(f"minimum QA below threshold: {row['minQa']}")

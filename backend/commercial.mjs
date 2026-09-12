@@ -27,6 +27,8 @@ import {
   normalizeBriefEnrichment,
   buildGuaranteedCampaign,
   assessGuaranteedCampaign,
+  applyClaimSafety,
+  campaignClaimSafety,
 } from './director-reliability.mjs';
 
 const client = new BedrockRuntimeClient({
@@ -559,6 +561,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   });
   if (isRevision && campaign) {
     normalized = applyRevisionPreservation(normalized, campaign, request?.rawBrief || '');
+      normalized = applyClaimSafety(normalized, request);
   }
   let qa = evaluateCampaign(normalized);
   const initialQa = qa;
@@ -599,6 +602,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         });
         if (isRevision && campaign) {
           repaired = applyRevisionPreservation(repaired, campaign, request?.rawBrief || '');
+      repaired = applyClaimSafety(repaired, request);
         }
         const repairedQa = evaluateCampaign(repaired);
         let repairedCritique = null;
@@ -665,6 +669,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         });
         if (isRevision && campaign) {
           rescueCandidate = applyRevisionPreservation(rescueCandidate, campaign, request?.rawBrief || '');
+      rescueCandidate = applyClaimSafety(rescueCandidate, request);
         }
 
         const rescueQa = evaluateCampaign(rescueCandidate);
@@ -726,6 +731,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         });
         if (isRevision && campaign) {
           altCandidate = applyRevisionPreservation(altCandidate, campaign, request?.rawBrief || '');
+      altCandidate = applyClaimSafety(altCandidate, request);
         }
 
         const altQa = evaluateCampaign(altCandidate);
@@ -778,6 +784,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       });
       if (isRevision && campaign) {
         fallbackCandidate = applyRevisionPreservation(fallbackCandidate, campaign, request?.rawBrief || '');
+      fallbackCandidate = applyClaimSafety(fallbackCandidate, request);
       }
 
       const fallbackQa = evaluateCampaign(fallbackCandidate);
@@ -865,6 +872,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         campaign,
         request?.rawBrief || '',
       );
+      guaranteed = applyClaimSafety(guaranteed, request);
     }
 
     const guaranteedQa = evaluateCampaign(guaranteed);
@@ -907,9 +915,14 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
+  normalized = applyClaimSafety(normalized, request);
+  qa = evaluateCampaign(normalized);
+  const claimSafetyAssessment = campaignClaimSafety(normalized, request);
+
   if (
     !qa.passed
     || qa.score < 90
+    || !claimSafetyAssessment.passed
     || (
       !guaranteedBlueprintUsed
       && (!creativeCritique || critiqueNeedsRepair(creativeCritique))
@@ -941,6 +954,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       modelServiceDegraded,
       modelCallCount,
       requestUsage: requestUsage(),
+      claimSafetyAssessment,
     };
   } catch {
     degradedFallbackUsed = true;
@@ -969,6 +983,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       modelServiceDegraded,
       modelCallCount,
       requestUsage: requestUsage(),
+      claimSafetyAssessment,
     };
   }
 }
@@ -1287,15 +1302,20 @@ export const handler = async (event) => {
           initialQaScore: result.initialQa?.score ?? null,
           finalQaScore: qa.score,
           creativeQuality: result.creativeCritique,
+          claimSafety: result.claimSafetyAssessment,
           qualityGate: result.guaranteedBlueprintUsed
             ? {
-                passed: result.guaranteedBlueprintAssessment?.passed === true,
+                passed: result.guaranteedBlueprintAssessment?.passed === true
+                  && result.claimSafetyAssessment?.passed !== false,
                 method: result.guaranteedBlueprintAssessment?.method || 'deterministic-production-blueprint-v1',
                 structuralQa: qa.score,
                 criticAdvisoryScore: result.creativeCritique?.score ?? null,
               }
             : {
-                passed: result.creativeCritique?.passed === true && qa.passed && qa.score >= 90,
+                passed: result.creativeCritique?.passed === true
+                  && qa.passed
+                  && qa.score >= 90
+                  && result.claimSafetyAssessment?.passed !== false,
                 method: 'semantic-critic-v1',
                 structuralQa: qa.score,
                 creativeScore: result.creativeCritique?.score ?? null,
@@ -1349,15 +1369,20 @@ export const handler = async (event) => {
           initialQaScore: result.initialQa?.score ?? null,
           finalQaScore: qa.score,
           creativeQuality: result.creativeCritique,
+          claimSafety: result.claimSafetyAssessment,
           qualityGate: result.guaranteedBlueprintUsed
             ? {
-                passed: result.guaranteedBlueprintAssessment?.passed === true,
+                passed: result.guaranteedBlueprintAssessment?.passed === true
+                  && result.claimSafetyAssessment?.passed !== false,
                 method: result.guaranteedBlueprintAssessment?.method || 'deterministic-production-blueprint-v1',
                 structuralQa: qa.score,
                 criticAdvisoryScore: result.creativeCritique?.score ?? null,
               }
             : {
-                passed: result.creativeCritique?.passed === true && qa.passed && qa.score >= 90,
+                passed: result.creativeCritique?.passed === true
+                  && qa.passed
+                  && qa.score >= 90
+                  && result.claimSafetyAssessment?.passed !== false,
                 method: 'semantic-critic-v1',
                 structuralQa: qa.score,
                 creativeScore: result.creativeCritique?.score ?? null,

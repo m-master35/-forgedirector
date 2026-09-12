@@ -762,6 +762,8 @@ export const handler = async (event) => {
           degradedFallbackUsed: result.degradedFallbackUsed,
           initialQaScore: result.initialQa?.score ?? null,
           finalQaScore: qa.score,
+          creativeQuality: result.creativeCritique,
+          criticUsage: result.criticUsage,
           requestId,
         },
       });
@@ -798,6 +800,8 @@ export const handler = async (event) => {
           degradedFallbackUsed: result.degradedFallbackUsed,
           initialQaScore: result.initialQa?.score ?? null,
           finalQaScore: qa.score,
+          creativeQuality: result.creativeCritique,
+          criticUsage: result.criticUsage,
           requestId,
         },
       });

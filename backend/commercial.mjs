@@ -1001,9 +1001,8 @@ async function invokeVideoAnalysis({ asset, payload }) {
       maxTokens: 5000,
       temperature: 0.1,
       topP: 0.9,
-      },
-    }));
-    };
+    },
+  }));
 
   const sendAnalysis = async (modelId, promptText) => {
     const retryable = new Set([

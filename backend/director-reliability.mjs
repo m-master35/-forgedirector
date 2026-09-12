@@ -560,7 +560,9 @@ export function normalizeBriefEnrichment(value, request = {}) {
   const visualStyle = cleanText(value.visualStyle, 700)
     || 'realistic mobile-first commercial imagery with purposeful framing, restrained lighting, clear focal separation, and physically plausible motion';
   const continuity = cleanText(value.continuity, 700)
-    || 'preserve recurring subject/product identity, palette, props, environment, lighting world, and styling across connected shots';
+    || (/focus timer/i.test(subject)
+      ? 'use the same dark smartphone, same desk environment, teal interface accent, restrained charcoal-and-warm-neutral palette, and soft left-side window light across connected shots'
+      : 'preserve recurring subject/product identity, exact product or wardrobe colors, props, environment, palette, lighting direction, and styling across connected shots');
   const cta = cleanText(value.cta, 300) || null;
   const claimBoundaries = Array.isArray(value.claimBoundaries)
     ? value.claimBoundaries.map((item) => cleanText(item, 400)).filter(Boolean).slice(0, 8)

@@ -295,7 +295,7 @@ components:
           type: number
           minimum: 1
           maximum: 120
-          description: Strongly recommended. When supplied, ForgeDirector verifies that the analysis timeline covers at least 85% of the declared duration and automatically retries with the stronger video model if needed.
+          description: Strongly recommended. When supplied, ForgeDirector verifies that the analysis timeline covers at least 95% of the declared duration and automatically retries with the stronger video model if needed.
         context:
           type: string
           maxLength: 3000

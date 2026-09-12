@@ -1147,7 +1147,10 @@ export const handler = async (event) => {
   try {
     payload = parseBody(event);
   } catch (error) {
-    return response(error?.statusCode || 400, { error: error?.message || 'Request body must be valid JSON.', requestId });
+    const message = error instanceof SyntaxError
+      ? 'Request body must be valid JSON.'
+      : (error?.message || 'Request body must be valid JSON.');
+    return response(error?.statusCode || 400, { error: message, requestId });
   }
 
   try {

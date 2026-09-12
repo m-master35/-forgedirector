@@ -284,4 +284,31 @@ const briefDoctorFallback = normalizeBriefEnrichment({}, prepareCreativeRequest(
 assert.ok(briefDoctorFallback.resolvedBrief.includes('fictional focus timer app'));
 assert.ok(briefDoctorFallback.beats.length >= 3);
 
+const guaranteedProductionDetail = normalizeCampaignManifest({
+  summary: 'A weakly prompted campaign that needs production detail.',
+  audience: 'General audience',
+  platform: 'TikTok',
+  aspectRatio: '9:16',
+  durationSeconds: 15,
+  scenes: [
+    { durationSeconds: 5, visualDirection: 'A phone on a messy desk.', voiceover: 'Too much going on.', generationPrompt: 'Cinematic phone on desk.' },
+    { durationSeconds: 5, visualDirection: 'A hand starts the timer.', voiceover: 'Start the timer.', generationPrompt: 'Show hand and timer.' },
+    { durationSeconds: 5, visualDirection: 'The desk is calm and the app is visible.', voiceover: 'Finish focused.', generationPrompt: 'Clean final frame.' },
+  ],
+}, {
+  request: prepareCreativeRequest({ brief: 'make it good' }),
+});
+
+for (const scene of guaranteedProductionDetail.scenes) {
+  const prompt = scene.generationPrompt.toLowerCase();
+  assert.ok(prompt.includes('camera path:'));
+  assert.ok(prompt.includes('lighting lock:'));
+  assert.ok(prompt.includes('continuity lock:'));
+  assert.ok(prompt.includes('negative constraints:'));
+  assert.ok(prompt.includes('progression cue:'));
+  assert.ok(scene.visualDirection.toLowerCase().includes('scene function:'));
+}
+assert.equal(evaluateCampaign(guaranteedProductionDetail).passed, true);
+assert.ok(evaluateCampaign(guaranteedProductionDetail).score >= 90);
+
 console.log('Director reliability tests passed');

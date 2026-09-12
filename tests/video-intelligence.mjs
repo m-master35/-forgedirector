@@ -396,4 +396,46 @@ const lateStartCoverage = assessVideoAnalysisCoverage({
 assert.equal(lateStartCoverage.startedAtBeginning, false);
 assert.equal(lateStartCoverage.fullDurationReviewed, false);
 
+const blindVerifierSource = {
+  timeline: [{
+    startSeconds: 0,
+    endSeconds: 6,
+    purpose: 'other',
+    visual: 'Dark title card with RIVAL and NOT START FREE.',
+    onScreenText: 'RIVAL\nNOT START FREE',
+    issues: [],
+  }],
+  cta: { present: false, type: 'none', clarity: 'weak', issue: 'No affirmative CTA.' },
+  continuity: { verdict: 'strong', issues: [] },
+  compliance: {
+    checks: [
+      { type: 'mustNotShow', rule: 'RIVAL', status: 'fail', evidence: 'RIVAL is visible.', timestampSeconds: 0 },
+      { type: 'mustIncludeText', rule: 'START FREE', status: 'pass', evidence: 'Incorrect source opinion.', timestampSeconds: 0 },
+    ],
+  },
+};
+const blindCompliance = normalizeVideoCompliance(blindVerifierSource, {
+  mustNotShow: ['RIVAL'],
+  mustIncludeText: ['START FREE'],
+});
+assert.equal(blindCompliance.status, 'fail');
+assert.equal(blindCompliance.checks.find((x) => x.type === 'mustNotShow').status, 'fail');
+assert.equal(blindCompliance.checks.find((x) => x.type === 'mustIncludeText').status, 'fail');
+
+const mainAnalysisForOverride = normalizeVideoAnalysis({
+  scores: {
+    hook: 85, pacing: 85, clarity: 85, visualQuality: 85,
+    continuity: 85, cta: 85, platformFit: 85, conversionReadiness: 85,
+  },
+  timeline: [{ startSeconds: 0, endSeconds: 6, purpose: 'cta', onScreenText: 'START FREE' }],
+  cta: { present: true, type: 'visual', clarity: 'strong', issue: null },
+}, {
+  requirements: { mustIncludeText: ['START FREE'] },
+  declaredDurationSeconds: 6,
+});
+assert.equal(mainAnalysisForOverride.compliance.status, 'pass');
+const overriddenByBlindVerifier = applyVerifiedVideoCompliance(mainAnalysisForOverride, blindCompliance);
+assert.equal(overriddenByBlindVerifier.compliance.status, 'fail');
+assert.notEqual(overriddenByBlindVerifier.qualityGate.action, 'accept');
+
 console.log('Video intelligence tests passed');

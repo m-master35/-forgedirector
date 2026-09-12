@@ -72,9 +72,169 @@ function normalizedConstraints(raw = {}) {
   return result;
 }
 
+
+const CLAIM_SENSITIVE_CATEGORIES = [
+  ['ingestible_wellness', /\b(?:supplement|vitamin|mineral|magnesium|creatine|nootropic|probiotic|prebiotic|energy drink|productivity drink|sleep aid|capsule|tablet|gummy|powder|nutraceutical)\b/i],
+  ['medical_health', /\b(?:medicine|medication|drug|treatment|therapy|medical|health condition|disease|pain|anxiety|depression|insomnia|diabetes|blood pressure|cholesterol)\b/i],
+  ['financial', /\b(?:invest(?:ment|ing)?|trading|crypto|stock|forex|loan|credit|finance|financial|wealth|returns?|profit|portfolio|savings?)\b/i],
+];
+
+const RISKY_CLAIM_PATTERNS = [
+  /\b(?:clinically|scientifically)\s+(?:proven|validated)\b/i,
+  /\b(?:doctor|expert|pharmacist)\s+(?:recommended|approved)\b/i,
+  /\b(?:guaranteed?|risk[- ]?free|zero risk|no risk)\b/i,
+  /\b(?:number one|#1|best|safest|strongest|fastest|superior to|better than)\b/i,
+  /\b(?:cure|cures|cured|treat|treats|treated|prevent|prevents|heal|heals|reverse|reverses)\b/i,
+  /\b(?:boost|boosts|improve|improves|enhance|enhances|increase|increases|sharpen|sharpens|support|supports|promote|promotes|reduce|reduces|relieve|relieves|eliminate|eliminates)\b[^.!?]{0,70}\b(?:focus|energy|sleep|stress|anxiety|pain|mood|memory|performance|productivity|immunity|digestion|recovery|testosterone|blood pressure|cholesterol|weight|fat|returns?|profit|income|wealth|savings?)\b/i,
+  /\b(?:double|triple|multiply|maximi[sz]e)\b[^.!?]{0,50}\b(?:money|returns?|profit|income|wealth|performance|results?)\b/i,
+  /\b(?:unlock|reach)\s+(?:your\s+)?(?:full\s+)?potential\b/i,
+  /\bwork\s+smarter(?:,?\s+not\s+harder)?\b/i,
+  /\b\d+(?:\.\d+)?\s*%\b[^.!?]{0,80}\b(?:better|faster|more|less|increase|decrease|improve|returns?|profit|effective|efficacy)\b/i,
+];
+
+function normalizedClaimText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[“”"'’]/g, '')
+    .replace(/[^a-z0-9%]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function classifyClaimSensitivity(rawBrief) {
+  const source = String(rawBrief || '');
+  const categories = CLAIM_SENSITIVE_CATEGORIES
+    .filter(([, pattern]) => pattern.test(source))
+    .map(([name]) => name);
+  return {
+    sensitive: categories.length > 0,
+    categories,
+  };
+}
+
+function sentenceLooksLikeRiskyClaim(sentence) {
+  return RISKY_CLAIM_PATTERNS.some((pattern) => pattern.test(String(sentence || '')));
+}
+
+function claimWasExplicitlySupplied(sentence, rawBrief) {
+  const claim = normalizedClaimText(sentence);
+  const raw = normalizedClaimText(rawBrief);
+  if (!claim || claim.length < 8 || !raw) return false;
+  return raw.includes(claim);
+}
+
+function sanitizeClaimBearingText(text, rawBrief, fallback) {
+  const source = cleanText(text, 4000);
+  if (!source) return source;
+  const parts = source.match(/[^.!?]+[.!?]?/g) || [source];
+  let changed = false;
+  const safe = [];
+  for (const part of parts) {
+    const sentence = part.trim();
+    if (!sentence) continue;
+    if (sentenceLooksLikeRiskyClaim(sentence) && !claimWasExplicitlySupplied(sentence, rawBrief)) {
+      changed = true;
+      continue;
+    }
+    safe.push(sentence);
+  }
+  if (!changed) return source;
+  const result = safe.join(' ').replace(/\s+/g, ' ').trim();
+  return result || fallback;
+}
+
+function claimSafeVoiceover(value, role, rawBrief, subject) {
+  const fallback = role === 'hook'
+    ? `Meet ${subject}.`
+    : role === 'payoff'
+      ? 'See how it fits your routine.'
+      : 'See the product in use.';
+  return sanitizeClaimBearingText(value, rawBrief, fallback);
+}
+
+export function applyClaimSafety(campaign, request = {}) {
+  if (!campaign || typeof campaign !== 'object' || Array.isArray(campaign)) return campaign;
+  const sensitivity = request?.claimSafety || classifyClaimSensitivity(request?.rawBrief);
+  if (!sensitivity?.sensitive) return campaign;
+
+  const rawBrief = request?.rawBrief || '';
+  const subject = inferSubjectFromBrief(rawBrief, request);
+  const next = clone(campaign);
+  const duration = Number(next.durationSeconds || 15);
+
+  next.summary = sanitizeClaimBearingText(
+    next.summary,
+    rawBrief,
+    `A ${duration}-second visual product story for ${subject}, focused on product use, continuity, and a clear end frame without invented outcome claims.`,
+  );
+  next.changeSummary = sanitizeClaimBearingText(
+    next.changeSummary,
+    rawBrief,
+    'Created a production-ready campaign while applying conservative claim-safety rules.',
+  );
+
+  if (Array.isArray(next.scenes)) {
+    next.scenes = next.scenes.map((scene, index) => {
+      const role = defaultSceneRole(index, next.scenes.length);
+      const safeVisual = sanitizeClaimBearingText(
+        scene?.visualDirection,
+        rawBrief,
+        `Show ${subject} in a neutral, observable use moment with no implied health, performance, financial, or guaranteed outcome.`,
+      );
+      const safePrompt = sanitizeClaimBearingText(
+        scene?.generationPrompt,
+        rawBrief,
+        `Generate a neutral product-use shot of ${subject}. Do not show or render unsupported outcome, comparative, medical, financial, or guarantee claims as text or implied results.`,
+      );
+      return {
+        ...scene,
+        visualDirection: safeVisual,
+        voiceover: claimSafeVoiceover(scene?.voiceover, role, rawBrief, subject),
+        generationPrompt: safePrompt,
+      };
+    });
+  }
+
+  return next;
+}
+
+export function campaignClaimSafety(campaign, request = {}) {
+  const sensitivity = request?.claimSafety || classifyClaimSensitivity(request?.rawBrief);
+  if (!sensitivity?.sensitive) {
+    return { passed: true, sensitive: false, categories: [], issues: [] };
+  }
+
+  const rawBrief = request?.rawBrief || '';
+  const issues = [];
+  const inspect = (field, value) => {
+    const parts = String(value || '').match(/[^.!?]+[.!?]?/g) || [];
+    for (const part of parts) {
+      if (sentenceLooksLikeRiskyClaim(part) && !claimWasExplicitlySupplied(part, rawBrief)) {
+        issues.push({ field, text: cleanText(part, 300) });
+      }
+    }
+  };
+
+  inspect('summary', campaign?.summary);
+  inspect('changeSummary', campaign?.changeSummary);
+  for (const [index, scene] of (campaign?.scenes || []).entries()) {
+    inspect(`scenes[${index}].voiceover`, scene?.voiceover);
+    inspect(`scenes[${index}].visualDirection`, scene?.visualDirection);
+    inspect(`scenes[${index}].generationPrompt`, scene?.generationPrompt);
+  }
+
+  return {
+    passed: issues.length === 0,
+    sensitive: true,
+    categories: sensitivity.categories || [],
+    issues,
+  };
+}
+
 export function prepareCreativeRequest(payload = {}) {
   const rawBrief = cleanText(payload?.brief ?? payload?.message ?? payload?.prompt, 6000);
   const constraints = normalizedConstraints(payload?.constraints);
+  const claimSafety = classifyClaimSensitivity(rawBrief);
   const issues = [];
   const assumptions = [];
 
@@ -116,12 +276,16 @@ export function prepareCreativeRequest(payload = {}) {
     '- Keep recurring people, products, wardrobe, setting, and palette visually consistent.',
     '- Prefer concrete, generator-ready camera and lighting instructions over generic adjectives.',
     '- Do not invent factual product, medical, financial, legal, performance, or comparative claims.',
-  ].join('\n');
+    claimSafety.sensitive
+      ? `- CLAIM-SAFE MODE is active for: ${claimSafety.categories.join(', ')}. Use neutral product-use language unless an exact claim was explicitly supplied by the user.`
+      : '',
+  ].filter(Boolean).join('\n');
 
   return {
     rawBrief,
     enrichedBrief,
     constraints,
+    claimSafety,
     quality: {
       score: qualityScore,
       tier: qualityScore >= 70 ? 'good' : qualityScore >= 35 ? 'weak' : 'poor',
@@ -424,7 +588,7 @@ export function normalizeCampaignManifest(candidate, {
     return { ...scene, generationPrompt };
   });
 
-  return {
+  const normalizedCampaign = {
     summary: cleanText(source.summary, 1200)
       || `A ${durationSeconds}-second ${platform} short-form concept built from the supplied creative direction.`,
     audience: cleanText(source.audience, 800)
@@ -444,6 +608,8 @@ export function normalizeCampaignManifest(candidate, {
         ? 'Applied the requested revision while preserving unrelated production decisions.'
         : 'Created a production-ready campaign with conservative defaults where the brief was silent.'),
   };
+
+  return applyClaimSafety(normalizedCampaign, request);
 }
 
 export function buildDeterministicFallbackCampaign({ request, previousCampaign = null, isRevision = false }) {

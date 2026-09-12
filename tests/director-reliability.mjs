@@ -6,6 +6,7 @@ import {
   buildDeterministicFallbackCampaign,
   normalizeCreativeCritique,
   critiqueNeedsRepair,
+  applyRevisionPreservation,
 } from '../backend/director-reliability.mjs';
 import { evaluateCampaign } from '../backend/qa.mjs';
 
@@ -232,5 +233,30 @@ const blockedCritique = normalizeCreativeCritique({
 });
 assert.equal(blockedCritique.passed, false);
 assert.equal(critiqueNeedsRepair(blockedCritique), true);
+
+const preservationCandidate = {
+  ...previous,
+  scenes: previous.scenes.map((scene, index) => ({
+    ...scene,
+    visualDirection: index === 0
+      ? 'Tighter opening close-up with immediate phone notification chaos.'
+      : 'MODEL CHANGED THIS EVEN THOUGH IT SHOULD HAVE BEEN PRESERVED',
+  })),
+  audience: 'Model changed audience',
+  platform: 'General',
+  aspectRatio: '16:9',
+};
+
+const preserved = applyRevisionPreservation(
+  preservationCandidate,
+  previous,
+  'Only make scene 1 punchier. Preserve every other scene exactly.',
+);
+assert.notEqual(preserved.scenes[0].visualDirection, previous.scenes[0].visualDirection);
+assert.deepEqual(preserved.scenes[1], previous.scenes[1]);
+assert.equal(preserved.audience, previous.audience);
+assert.equal(preserved.platform, previous.platform);
+assert.equal(preserved.aspectRatio, previous.aspectRatio);
+assert.deepEqual(preserved.continuity, previous.continuity);
 
 console.log('Director reliability tests passed');

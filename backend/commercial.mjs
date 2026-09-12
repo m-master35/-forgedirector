@@ -1289,7 +1289,10 @@ async function invokeVideoAnalysis({ asset, payload }) {
 
         if (
           declaredDurationSeconds
-          && verifierCoverage?.fullDurationReviewed === false
+          && !isAuthoritativeVerifierCoverage(
+            verifierCoverage,
+            declaredDurationSeconds,
+          )
         ) {
           complianceVerificationRetryUsed = true;
           const coverageRecoveryPrompt = `${compliancePrompt}\n\nFULL-DURATION VERIFIER RECOVERY: Your previous timeline did not prove inspection of at least 95% of the declared ${declaredDurationSeconds}-second clip. Reinspect the video from near 0 seconds through the final 5%, cover the middle contiguously, and then re-evaluate every requirement from observable evidence only. Return the required JSON object only.`;
@@ -1316,7 +1319,10 @@ async function invokeVideoAnalysis({ asset, payload }) {
 
               if (
                 recoveredCompliance
-                && recoveredCoverage?.fullDurationReviewed === true
+                && isAuthoritativeVerifierCoverage(
+                  recoveredCoverage,
+                  declaredDurationSeconds,
+                )
               ) {
                 verifierParsed = recoveredParsed;
                 normalizedCompliance = recoveredCompliance;
@@ -1331,7 +1337,10 @@ async function invokeVideoAnalysis({ asset, payload }) {
 
         if (
           declaredDurationSeconds
-          && verifierCoverage?.fullDurationReviewed !== true
+          && !isAuthoritativeVerifierCoverage(
+            verifierCoverage,
+            declaredDurationSeconds,
+          )
         ) {
           lastVerifierError = new Error(
             'Blind compliance verifier did not demonstrate required full-duration coverage.',

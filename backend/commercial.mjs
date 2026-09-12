@@ -1209,7 +1209,7 @@ export const handler = async (event) => {
     }
 
     if (method === 'POST' && path === '/v1/qa') {
-      const campaign = assertCampaign(payload?.campaign ?? payload);
+      const campaign = assertCampaign(payload?.campaign);
       return response(200, {
         qa: evaluateCampaign(campaign),
         requestId,

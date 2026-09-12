@@ -502,7 +502,7 @@ components:
             additionalProperties: true
         coverage:
           type: object
-          required: [declaredDurationSeconds, observedThroughSeconds, coverageRatio, requiredCoverageRatio, fullDurationReviewed, timelineSegments]
+          required: [declaredDurationSeconds, observedThroughSeconds, coveredSeconds, coverageRatio, requiredCoverageRatio, startedAtBeginning, reachedFinalSegment, fullDurationReviewed, timelineSegments]
           description: Evidence that the returned timeline spans the declared clip duration. When durationSeconds was not supplied, duration-dependent fields may be null.
           properties:
             declaredDurationSeconds:
@@ -511,6 +511,11 @@ components:
             observedThroughSeconds:
               type: number
               minimum: 0
+            coveredSeconds:
+              type: number
+              nullable: true
+              minimum: 0
+              description: Union duration covered by valid timeline intervals after overlaps are merged.
             coverageRatio:
               type: number
               nullable: true
@@ -521,9 +526,18 @@ components:
               nullable: true
               minimum: 0
               maximum: 1
+            startedAtBeginning:
+              type: boolean
+              nullable: true
+              description: True when timeline evidence begins within the allowed opening tolerance.
+            reachedFinalSegment:
+              type: boolean
+              nullable: true
+              description: True when timeline evidence reaches the final 5% of the declared clip.
             fullDurationReviewed:
               type: boolean
               nullable: true
+              description: True only when at least 95% of the clip is covered, analysis starts near the opening, reaches the final 5%, and minimum timeline segmentation is met.
             timelineSegments:
               type: integer
               minimum: 0

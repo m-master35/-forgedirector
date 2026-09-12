@@ -405,3 +405,54 @@ export function buildDirectorRepairPrompt({ originalMessage, candidate, qa, crea
     JSON.stringify(creativeCritic || null),
   ].join('\n');
 }
+
+
+const CRITIC_DIMENSIONS = [
+  'briefFit',
+  'hookStrength',
+  'visualSpecificity',
+  'progression',
+  'generationReadiness',
+  'continuity',
+  'claimRestraint',
+];
+
+function clampScore(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+export function normalizeCreativeCritique(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const dimensions = {};
+  for (const key of CRITIC_DIMENSIONS) {
+    dimensions[key] = clampScore(value?.dimensions?.[key], 0);
+  }
+
+  const blockingIssues = Array.isArray(value.blockingIssues)
+    ? value.blockingIssues.map((item) => cleanText(item, 500)).filter(Boolean).slice(0, 10)
+    : [];
+  const improvements = Array.isArray(value.improvements)
+    ? value.improvements.map((item) => cleanText(item, 500)).filter(Boolean).slice(0, 10)
+    : [];
+
+  const dimensionValues = Object.values(dimensions);
+  const dimensionAverage = Math.round(
+    dimensionValues.reduce((sum, score) => sum + score, 0) / Math.max(1, dimensionValues.length),
+  );
+  const declared = clampScore(value.score, dimensionAverage);
+  const score = Math.min(declared, Math.max(0, dimensionAverage + 8));
+
+  return {
+    score,
+    dimensions,
+    blockingIssues,
+    improvements,
+    passed: score >= 82 && blockingIssues.length === 0,
+  };
+}
+
+export function critiqueNeedsRepair(critique) {
+  return !critique || critique.passed !== true;
+}

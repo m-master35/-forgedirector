@@ -915,6 +915,14 @@ export function applyVerifiedVideoCompliance(analysis, compliance) {
 }
 
 
+export function isAuthoritativeVerifierCoverage(coverage, declaredDurationSeconds = null) {
+  if (!declaredDurationSeconds) return true;
+  return coverage?.fullDurationReviewed === true
+    && Number(coverage?.coverageRatio || 0) >= 0.95
+    && coverage?.startedAtBeginning === true
+    && coverage?.reachedFinalSegment === true;
+}
+
 export function assessVideoAnalysisCoverage(analysis, declaredDurationSeconds = null) {
   const duration = Number(declaredDurationSeconds);
   const timeline = Array.isArray(analysis?.timeline) ? analysis.timeline : [];

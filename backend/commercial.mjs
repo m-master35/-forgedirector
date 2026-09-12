@@ -709,6 +709,41 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     || !creativeCritique
     || critiqueNeedsRepair(creativeCritique)
   ) {
+    if (!isRevision && !briefEnrichment && MODEL_ID) {
+      const finalEnrichmentModels = [
+        VIDEO_FALLBACK_MODEL_ID,
+        MODEL_ID,
+      ].filter(Boolean);
+
+      for (const modelId of [...new Set(finalEnrichmentModels)]) {
+        try {
+          const enrichResult = await client.send(new ConverseCommand({
+            modelId,
+            system: [{ text: BRIEF_ENRICHER_SYSTEM_PROMPT }],
+            messages: [{
+              role: 'user',
+              content: [{ text: buildBriefEnricherPrompt({ request }) }],
+            }],
+            inferenceConfig: {
+              maxTokens: 1500,
+              temperature: 0.1,
+              topP: 0.9,
+            },
+          }));
+          const parsedEnrichment = parseDirectorJson(extractText(enrichResult));
+          const normalizedEnrichment = normalizeBriefEnrichment(parsedEnrichment, request);
+          if (normalizedEnrichment) {
+            briefEnrichment = normalizedEnrichment;
+            briefEnrichmentUsed = true;
+            request.enrichedBrief = normalizedEnrichment.resolvedBrief;
+            break;
+          }
+        } catch {
+          // The deterministic subject extractor below remains available.
+        }
+      }
+    }
+
     let guaranteed = buildGuaranteedCampaign({
       request,
       briefEnrichment,

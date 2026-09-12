@@ -449,4 +449,34 @@ assert.equal(
   longGuaranteedCampaign.scenes.length,
 );
 
+const longShortformRequest = prepareCreativeRequest({
+  brief: 'Create a paced educational short explaining a fictional three-step document approval workflow, using visual examples and no invented numerical claims.',
+  constraints: {
+    durationSeconds: 60,
+    platform: 'YouTube Shorts',
+  },
+});
+const longShortformEnrichment = normalizeBriefEnrichment({}, longShortformRequest);
+const longShortformGuaranteed = buildGuaranteedCampaign({
+  request: longShortformRequest,
+  briefEnrichment: longShortformEnrichment,
+});
+const longShortformAssessment = assessGuaranteedCampaign(longShortformGuaranteed);
+assert.equal(
+  longShortformAssessment.passed,
+  true,
+  JSON.stringify({
+    assessment: longShortformAssessment,
+    qa: evaluateCampaign(longShortformGuaranteed),
+    campaign: longShortformGuaranteed,
+  }, null, 2),
+);
+assert.equal(evaluateCampaign(longShortformGuaranteed).passed, true);
+assert.ok(evaluateCampaign(longShortformGuaranteed).score >= 90);
+assert.equal(longShortformGuaranteed.durationSeconds, 60);
+assert.equal(
+  longShortformGuaranteed.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
+  60,
+);
+
 console.log('Director reliability tests passed');

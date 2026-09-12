@@ -251,17 +251,50 @@ function defaultVisual(role, brief) {
   return `Develop the idea from: ${seed}. Show a concrete action or proof beat, preserve recurring subject/product appearance, use purposeful composition and a visually distinct progression from the previous scene.`;
 }
 
-function generatorPrompt({ role, visual, aspectRatio, continuityText }) {
+function roleProductionSpec(role, index, count) {
+  if (role === 'hook') {
+    return [
+      'Scene function: opening hook; begin in medias res on the most visually distinctive problem, action, or product detail within the first frame.',
+      'Camera path: start tight (macro or close medium depending on subject) and use one controlled push-in, snap reveal, or short motivated track during the first 1-2 seconds; no slow establishing shot.',
+      'Progression cue: end on an action, glance, tap, object movement, or compositional change that creates a clean cut into the next beat.',
+    ].join(' ');
+  }
+  if (role === 'payoff') {
+    return [
+      'Scene function: payoff/end state; show a visibly resolved state rather than repeating the opening composition.',
+      'Camera path: settle into a stable medium, product-hero, or clean detail frame with a subtle pull-back or focus settle; finish with one unmistakable focal subject.',
+      'Progression cue: the final composition must visually contrast with the opening state while preserving the same world, product, and styling.',
+    ].join(' ');
+  }
+  if (role === 'proof') {
+    return [
+      'Scene function: proof/detail beat; reveal one new observable detail or consequence that has not appeared in earlier scenes.',
+      'Camera path: use a deliberate detail-to-context move, short lateral track, or focus pull tied to the subject action.',
+      'Progression cue: introduce a genuinely new visual fact, state, or interaction rather than replaying the prior beat.',
+    ].join(' ');
+  }
+  return [
+    'Scene function: development/demo beat; show one concrete interaction, transformation, or observable state change.',
+    'Camera path: start at a readable medium or close-medium frame, then pan, track, or push toward the exact action; keep the movement physically motivated.',
+    'Progression cue: move the story from the opening condition toward the payoff with a visibly different action and composition.',
+  ].join(' ');
+}
+
+function productionLock({ role, visual, aspectRatio, continuityText, index = 0, count = 1 }) {
   return [
     `Short-form ${aspectRatio} video, ${role} scene.`,
+    roleProductionSpec(role, index, count),
     visual,
-    'Camera: specify a deliberate framing and motivated movement; avoid random zooms or unmotivated cuts.',
-    'Lighting: realistic, coherent direction and exposure; preserve the same lighting world across connected scenes.',
-    `Continuity: ${continuityText}`,
-    'Motion: natural subject and camera motion with physically plausible timing.',
-    'Composition: one clear focal subject, mobile-readable silhouette, uncluttered background separation.',
-    'Avoid: identity drift, wardrobe/color changes, warped hands/faces, illegible text, duplicate objects, sudden style changes, unnecessary logos.',
+    'Lighting lock: use one identifiable key-light direction and exposure logic; preserve that lighting world across connected shots unless the story explicitly motivates a change.',
+    `Continuity lock: ${continuityText}.`,
+    'Motion lock: natural subject motion, stable geometry, physically plausible timing, and only one primary camera movement per shot.',
+    'Composition lock: one clear focal subject, mobile-readable silhouette, foreground/background separation, and intentional negative space only where useful.',
+    'Negative constraints: no identity drift, no wardrobe or product-color drift, no unrelated people, no random logos, no extra text overlays unless requested, no warped hands/faces, no duplicate objects, no geometry mutations, no unexplained environment reset, no sudden style or palette change.',
   ].join(' ');
+}
+
+function generatorPrompt({ role, visual, aspectRatio, continuityText, index = 0, count = 1 }) {
+  return productionLock({ role, visual, aspectRatio, continuityText, index, count });
 }
 
 export function normalizeCampaignManifest(candidate, {
@@ -308,21 +341,35 @@ export function normalizeCampaignManifest(candidate, {
 
   scenes = scenes.map((scene, index) => {
     const role = defaultSceneRole(index, scenes.length);
-    const visualDirection = cleanText(scene.visualDirection, 1800)
+    const baseVisual = cleanText(scene.visualDirection, 1800)
       || defaultVisual(role, brief);
-    const generationPrompt = cleanText(scene.generationPrompt, 4000)
-      || generatorPrompt({ role, visual: visualDirection, aspectRatio, continuityText });
+    const roleCue = roleProductionSpec(role, index, scenes.length);
+    const visualDirection = /scene function:|opening hook|payoff\/end state|development\/demo beat|proof\/detail beat/i.test(baseVisual)
+      ? baseVisual
+      : `${baseVisual} ${roleCue}`.slice(0, 1800);
 
-    const detailPatterns = [
-      /camera|shot|frame|close[- ]?up|wide|medium|macro|push|pull|pan|tilt|orbit|dolly|tracking/i,
-      /light|lighting|shadow|exposure|backlit|softbox|sun|neon|practical/i,
-      /move|motion|walk|turn|reach|pour|open|reveal|enter|exit|action|transition/i,
+    const rawGenerationPrompt = cleanText(scene.generationPrompt, 4000);
+    const baseProductionLock = productionLock({
+      role,
+      visual: visualDirection,
+      aspectRatio,
+      continuityText,
+      index,
+      count: scenes.length,
+    });
+
+    const requiredSignals = [
+      /camera path:|camera|shot|frame|close[- ]?up|wide|medium|macro|push|pull|pan|tilt|orbit|dolly|track/i,
+      /lighting lock:|light|lighting|shadow|exposure|backlit|softbox|sun|neon|practical/i,
+      /progression cue:|progression|transform|change|reveal|action|interaction|payoff/i,
+      /continuity lock:|continuity|same (?:person|product|subject|wardrobe|environment)/i,
+      /negative constraints:|avoid:|no identity drift|no random logos/i,
     ];
-    const detailCount = detailPatterns.filter((pattern) => pattern.test(generationPrompt)).length;
-    const needsProductionEnrichment = generationPrompt.length < 120 || detailCount < 2;
+    const signalCount = requiredSignals.filter((pattern) => pattern.test(rawGenerationPrompt)).length;
+    const needsProductionEnrichment = rawGenerationPrompt.length < 180 || signalCount < requiredSignals.length;
     const enrichedGenerationPrompt = needsProductionEnrichment
-      ? `${generationPrompt} ${generatorPrompt({ role, visual: visualDirection, aspectRatio, continuityText })}`
-      : generationPrompt;
+      ? `${rawGenerationPrompt} ${baseProductionLock}`.trim()
+      : rawGenerationPrompt;
 
     return {
       id: index + 1,

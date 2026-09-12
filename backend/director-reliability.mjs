@@ -444,12 +444,26 @@ export function normalizeCreativeCritique(value) {
   const declared = clampScore(value.score, dimensionAverage);
   const score = Math.min(declared, Math.max(0, dimensionAverage + 8));
 
+  const dimensionFloors = {
+    briefFit: 82,
+    hookStrength: 78,
+    visualSpecificity: 80,
+    progression: 78,
+    generationReadiness: 82,
+    continuity: 82,
+    claimRestraint: 90,
+  };
+  const weakDimensions = Object.entries(dimensionFloors)
+    .filter(([key, floor]) => dimensions[key] < floor)
+    .map(([key]) => key);
+
   return {
     score,
     dimensions,
     blockingIssues,
     improvements,
-    passed: score >= 82 && blockingIssues.length === 0,
+    weakDimensions,
+    passed: score >= 86 && blockingIssues.length === 0 && weakDimensions.length === 0,
   };
 }
 

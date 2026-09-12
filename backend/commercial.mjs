@@ -325,6 +325,7 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
         topP: 0.9,
       },
     }));
+    };
 
     const attempt = async (modelId) => {
       let criticResult;

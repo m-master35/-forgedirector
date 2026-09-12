@@ -10,6 +10,9 @@ import {
   normalizeBriefEnrichment,
   buildGuaranteedCampaign,
   assessGuaranteedCampaign,
+  classifyClaimSensitivity,
+  applyClaimSafety,
+  campaignClaimSafety,
 } from '../backend/director-reliability.mjs';
 import { evaluateCampaign } from '../backend/qa.mjs';
 
@@ -478,5 +481,87 @@ assert.equal(
   longShortformGuaranteed.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
   60,
 );
+
+const supplementRequest = prepareCreativeRequest({
+  brief: 'Create a premium short-form ad for a fictional magnesium supplement for young professionals.',
+  constraints: { durationSeconds: 15, platform: 'TikTok' },
+});
+assert.equal(supplementRequest.claimSafety.sensitive, true);
+assert.ok(supplementRequest.claimSafety.categories.includes('ingestible_wellness'));
+
+const unsafeSupplement = normalizeCampaignManifest({
+  summary: 'A supplement campaign that improves sleep and boosts focus.',
+  audience: 'Young professionals',
+  platform: 'TikTok',
+  aspectRatio: '9:16',
+  durationSeconds: 15,
+  continuity: { leadCharacter: 'same bottle', locked: true },
+  scenes: [
+    {
+      durationSeconds: 5,
+      visualDirection: 'Bottle on a bedside table with a calm evening routine.',
+      voiceover: 'Boost your focus now.',
+      generationPrompt: 'Macro bottle shot on a bedside table, slow push-in, soft left-side light, same bottle and label. Show the product improving sleep and reducing stress.'
+    },
+    {
+      durationSeconds: 5,
+      visualDirection: 'The same bottle beside a glass of water in a neutral routine.',
+      voiceover: 'Improve your sleep tonight.',
+      generationPrompt: 'Medium shot of same bottle and water glass, controlled lateral track, coherent lighting, stable product geometry.'
+    },
+    {
+      durationSeconds: 5,
+      visualDirection: 'Clean product hero frame with neutral end-card space.',
+      voiceover: 'Unlock your full potential.',
+      generationPrompt: 'Stable hero shot, same bottle, same palette, soft key light, clean negative space.'
+    },
+  ],
+}, { request: supplementRequest });
+
+const unsafeSupplementText = JSON.stringify(unsafeSupplement).toLowerCase();
+assert.ok(!unsafeSupplementText.includes('boost your focus'));
+assert.ok(!unsafeSupplementText.includes('improve your sleep'));
+assert.ok(!unsafeSupplementText.includes('unlock your full potential'));
+assert.ok(!unsafeSupplementText.includes('improving sleep'));
+assert.equal(campaignClaimSafety(unsafeSupplement, supplementRequest).passed, true);
+assert.equal(evaluateCampaign(unsafeSupplement).passed, true);
+
+const financialRequest = prepareCreativeRequest({
+  brief: 'Create a launch video for a fictional investing app for first-time investors.',
+});
+assert.equal(classifyClaimSensitivity(financialRequest.rawBrief).sensitive, true);
+const unsafeFinancial = applyClaimSafety({
+  summary: 'An investing app that guarantees returns and doubles your money.',
+  durationSeconds: 15,
+  changeSummary: 'Built a campaign promising risk-free profit.',
+  scenes: [{
+    id: 1,
+    durationSeconds: 15,
+    visualDirection: 'A phone shows a portfolio screen.',
+    voiceover: 'Get guaranteed returns.',
+    generationPrompt: 'Phone interface on a desk. Show risk-free profit and guaranteed returns.'
+  }],
+}, financialRequest);
+const unsafeFinancialText = JSON.stringify(unsafeFinancial).toLowerCase();
+assert.ok(!unsafeFinancialText.includes('guaranteed returns'));
+assert.ok(!unsafeFinancialText.includes('risk-free profit'));
+assert.equal(campaignClaimSafety(unsafeFinancial, financialRequest).passed, true);
+
+const explicitClaimRequest = prepareCreativeRequest({
+  brief: 'Create a fictional supplement ad. Use this exact supplied voiceover copy: "Boost your focus now."',
+});
+const explicitClaimCampaign = applyClaimSafety({
+  summary: 'Neutral fictional supplement ad.',
+  durationSeconds: 5,
+  changeSummary: 'Used the supplied copy.',
+  scenes: [{
+    id: 1,
+    durationSeconds: 5,
+    visualDirection: 'Bottle hero shot.',
+    voiceover: 'Boost your focus now.',
+    generationPrompt: 'Bottle hero shot with neutral lighting.'
+  }],
+}, explicitClaimRequest);
+assert.equal(explicitClaimCampaign.scenes[0].voiceover, 'Boost your focus now.');
 
 console.log('Director reliability tests passed');

@@ -20,6 +20,7 @@ import {
   buildDirectorRepairPrompt,
   normalizeCreativeCritique,
   critiqueNeedsRepair,
+  applyRevisionPreservation,
 } from './director-reliability.mjs';
 
 const client = new BedrockRuntimeClient({
@@ -379,6 +380,9 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     previousCampaign: campaign,
     isRevision,
   });
+  if (isRevision && campaign) {
+    normalized = applyRevisionPreservation(normalized, campaign, request?.rawBrief || '');
+  }
   let qa = evaluateCampaign(normalized);
   const initialQa = qa;
   let repairUsed = false;
@@ -408,11 +412,14 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       const repairResult = await sendDirector(repairModel, repairPrompt);
       const repairedParsed = parseDirectorJson(extractText(repairResult));
       if (repairedParsed) {
-        const repaired = normalizeCampaignManifest(repairedParsed, {
+        let repaired = normalizeCampaignManifest(repairedParsed, {
           request,
           previousCampaign: campaign,
           isRevision,
         });
+        if (isRevision && campaign) {
+          repaired = applyRevisionPreservation(repaired, campaign, request?.rawBrief || '');
+        }
         const repairedQa = evaluateCampaign(repaired);
         let repairedCritique = null;
         let repairedCriticUsage = null;

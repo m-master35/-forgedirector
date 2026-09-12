@@ -1,0 +1,54 @@
+name: Benchmark Director Robustness
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Deploy Commercial API
+    types:
+      - completed
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+
+jobs:
+  benchmark:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorRobustnessBenchmark
+          mask-aws-account-id: true
+
+      - name: Resolve live API URL
+        id: api
+        run: |
+          API_URL=$(aws cloudformation describe-stacks             --stack-name forgedirector-commercial             --region "$AWS_REGION"             --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue"             --output text)
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Run bad-prompt and revision benchmark
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: python tests/run-live-director-robustness.py
+
+      - name: Add benchmark summary
+        if: always()
+        run: |
+          if [ -f /tmp/director-robustness-summary.md ]; then
+            cat /tmp/director-robustness-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi

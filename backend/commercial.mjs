@@ -1278,17 +1278,72 @@ async function invokeVideoAnalysis({ asset, payload }) {
           continue;
         }
 
-        const normalizedCompliance = normalizeVideoCompliance(verifierParsed, requirements);
+        let normalizedCompliance = normalizeVideoCompliance(verifierParsed, requirements);
         if (!normalizedCompliance) {
           lastVerifierError = new Error('Blind compliance verifier did not return a usable normalized compliance result.');
           lastVerifierError.diagnosticCode = 'compliance_verifier_unusable_result';
           continue;
         }
 
+        let verifierCoverage = assessVideoAnalysisCoverage(verifierParsed, declaredDurationSeconds);
+
+        if (
+          declaredDurationSeconds
+          && verifierCoverage?.fullDurationReviewed === false
+        ) {
+          complianceVerificationRetryUsed = true;
+          const coverageRecoveryPrompt = `${compliancePrompt}\n\nFULL-DURATION VERIFIER RECOVERY: Your previous timeline did not prove inspection of at least 95% of the declared ${declaredDurationSeconds}-second clip. Reinspect the video from near 0 seconds through the final 5%, cover the middle contiguously, and then re-evaluate every requirement from observable evidence only. Return the required JSON object only.`;
+
+          try {
+            const coverageRecoveryResult = await invokeComplianceOnce(
+              verifierModelId,
+              coverageRecoveryPrompt,
+            );
+            recordVerifierUsage(coverageRecoveryResult);
+            const recoveredParsed = parseVideoAnalysisModelJson(
+              extractText(coverageRecoveryResult),
+            );
+
+            if (recoveredParsed) {
+              const recoveredCompliance = normalizeVideoCompliance(
+                recoveredParsed,
+                requirements,
+              );
+              const recoveredCoverage = assessVideoAnalysisCoverage(
+                recoveredParsed,
+                declaredDurationSeconds,
+              );
+
+              if (
+                recoveredCompliance
+                && recoveredCoverage?.fullDurationReviewed === true
+              ) {
+                verifierParsed = recoveredParsed;
+                normalizedCompliance = recoveredCompliance;
+                verifierCoverage = recoveredCoverage;
+                verifierResult = coverageRecoveryResult;
+              }
+            }
+          } catch (error) {
+            lastVerifierError = error;
+          }
+        }
+
+        if (
+          declaredDurationSeconds
+          && verifierCoverage?.fullDurationReviewed !== true
+        ) {
+          lastVerifierError = new Error(
+            'Blind compliance verifier did not demonstrate required full-duration coverage.',
+          );
+          lastVerifierError.diagnosticCode = 'compliance_verifier_incomplete_coverage';
+          continue;
+        }
+
         verificationRecords.push({
           modelId: verifierModelId,
           compliance: normalizedCompliance,
-          coverage: assessVideoAnalysisCoverage(verifierParsed, declaredDurationSeconds),
+          coverage: verifierCoverage,
           usage: verifierResult?.usage || null,
         });
       } catch (error) {

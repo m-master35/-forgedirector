@@ -7,6 +7,13 @@ import {
   buildVideoAnalysisPrompt,
   normalizeVideoAnalysis,
 } from './video-intelligence.mjs';
+import {
+  prepareCreativeRequest,
+  parseDirectorJson,
+  normalizeCampaignManifest,
+  buildDeterministicFallbackCampaign,
+  buildDirectorRepairPrompt,
+} from './director-reliability.mjs';
 
 const client = new BedrockRuntimeClient({
   region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION,
@@ -82,7 +89,7 @@ function validateManifest(manifest) {
 
   const duration = Number(manifest.durationSeconds);
   const total = manifest.scenes.reduce((sum, scene) => sum + Number(scene?.durationSeconds || 0), 0);
-  if (!Number.isFinite(duration) || duration <= 0 || total !== duration) {
+  if (!Number.isFinite(duration) || duration <= 0 || Math.abs(total - duration) > 0.001) {
     throw new Error('Scene durations do not match campaign duration.');
   }
 
@@ -218,33 +225,175 @@ function authorized(event, path) {
   return supplied && supplied === RAPIDAPI_PROXY_SECRET;
 }
 
-async function invokeDirector({ message, campaign }) {
+async function invokeDirector({ message, campaign, request, isRevision = false }) {
   if (!MODEL_ID) {
-    const error = new Error('BEDROCK_MODEL_ID is not configured.');
-    error.statusCode = 503;
-    throw error;
+    const fallbackCampaign = buildDeterministicFallbackCampaign({
+      request,
+      previousCampaign: campaign,
+      isRevision,
+    });
+    return {
+      campaign: validateManifest(fallbackCampaign),
+      usage: null,
+      repairUsed: false,
+      degradedFallbackUsed: true,
+      modelId: null,
+      initialQa: evaluateCampaign(fallbackCampaign),
+    };
   }
 
-  const result = await client.send(new ConverseCommand({
-    modelId: MODEL_ID,
+  const invokeOnce = async (modelId, promptText) => client.send(new ConverseCommand({
+    modelId,
     system: [{ text: SYSTEM_PROMPT }],
     messages: [{
       role: 'user',
-      content: [{ text: buildUserPrompt({ message, campaign }) }],
+      content: [{ text: buildUserPrompt({ message: promptText, campaign }) }],
     }],
     inferenceConfig: {
-      maxTokens: 3200,
-      temperature: 0.3,
+      maxTokens: 4200,
+      temperature: 0.2,
       topP: 0.9,
     },
   }));
 
-  const rawText = extractText(result);
-  const campaignResult = validateManifest(JSON.parse(cleanModelJson(rawText)));
-  return {
-    campaign: campaignResult,
-    usage: result?.usage || null,
+  const sendDirector = async (modelId, promptText) => {
+    const retryable = new Set([
+      'ThrottlingException',
+      'ServiceUnavailableException',
+      'InternalServerException',
+      'ModelTimeoutException',
+      'ModelNotReadyException',
+    ]);
+
+    try {
+      return await invokeOnce(modelId, promptText);
+    } catch (error) {
+      const name = String(error?.name || error?.Code || '');
+      const status = Number(error?.$metadata?.httpStatusCode || 0);
+      if (!retryable.has(name) && !(status >= 500 && status <= 599)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      return invokeOnce(modelId, promptText);
+    }
   };
+
+  const preferredModel = request?.quality?.tier === 'poor' && VIDEO_FALLBACK_MODEL_ID
+    ? VIDEO_FALLBACK_MODEL_ID
+    : MODEL_ID;
+
+  let result;
+  let usedModelId = preferredModel;
+  let degradedFallbackUsed = false;
+
+  try {
+    result = await sendDirector(usedModelId, message);
+  } catch (primaryError) {
+    if (VIDEO_FALLBACK_MODEL_ID && VIDEO_FALLBACK_MODEL_ID !== usedModelId) {
+      usedModelId = VIDEO_FALLBACK_MODEL_ID;
+      try {
+        result = await sendDirector(usedModelId, message);
+      } catch {
+        const fallbackCampaign = buildDeterministicFallbackCampaign({
+          request,
+          previousCampaign: campaign,
+          isRevision,
+        });
+        return {
+          campaign: validateManifest(fallbackCampaign),
+          usage: null,
+          repairUsed: false,
+          degradedFallbackUsed: true,
+          modelId: null,
+          initialQa: evaluateCampaign(fallbackCampaign),
+        };
+      }
+    } else {
+      const fallbackCampaign = buildDeterministicFallbackCampaign({
+        request,
+        previousCampaign: campaign,
+        isRevision,
+      });
+      return {
+        campaign: validateManifest(fallbackCampaign),
+        usage: null,
+        repairUsed: false,
+        degradedFallbackUsed: true,
+        modelId: null,
+        initialQa: evaluateCampaign(fallbackCampaign),
+      };
+    }
+  }
+
+  let parsed = parseDirectorJson(extractText(result));
+  let normalized = normalizeCampaignManifest(parsed, {
+    request,
+    previousCampaign: campaign,
+    isRevision,
+  });
+  let qa = evaluateCampaign(normalized);
+  const initialQa = qa;
+  let repairUsed = false;
+
+  if (!parsed || !qa.passed || qa.score < 90) {
+    repairUsed = true;
+    const repairPrompt = buildDirectorRepairPrompt({
+      originalMessage: message,
+      candidate: normalized,
+      qa,
+      previousCampaign: campaign,
+    });
+    const repairModel = VIDEO_FALLBACK_MODEL_ID || usedModelId;
+
+    try {
+      const repairResult = await sendDirector(repairModel, repairPrompt);
+      const repairedParsed = parseDirectorJson(extractText(repairResult));
+      if (repairedParsed) {
+        const repaired = normalizeCampaignManifest(repairedParsed, {
+          request,
+          previousCampaign: campaign,
+          isRevision,
+        });
+        const repairedQa = evaluateCampaign(repaired);
+        if (
+          (repairedQa.passed && !qa.passed)
+          || repairedQa.score >= qa.score
+        ) {
+          normalized = repaired;
+          qa = repairedQa;
+          result = repairResult;
+          usedModelId = repairModel;
+        }
+      }
+    } catch {
+      // The deterministic normalization below is intentionally sufficient to
+      // return a structurally valid campaign even when the repair call fails.
+    }
+  }
+
+  try {
+    return {
+      campaign: validateManifest(normalized),
+      usage: result?.usage || null,
+      repairUsed,
+      degradedFallbackUsed,
+      modelId: usedModelId,
+      initialQa,
+    };
+  } catch {
+    degradedFallbackUsed = true;
+    const fallbackCampaign = buildDeterministicFallbackCampaign({
+      request,
+      previousCampaign: campaign,
+      isRevision,
+    });
+    return {
+      campaign: validateManifest(fallbackCampaign),
+      usage: result?.usage || null,
+      repairUsed,
+      degradedFallbackUsed,
+      modelId: usedModelId,
+      initialQa,
+    };
+  }
 }
 
 function parseVideoAnalysisModelJson(text) {
@@ -384,17 +533,17 @@ async function invokeVideoAnalysis({ asset, payload }) {
   };
 }
 
-function planMessage(payload) {
-  const brief = assertText(payload?.brief ?? payload?.message, 'brief');
-  const constraints = payload?.constraints && typeof payload.constraints === 'object'
-    ? `\n\nUSER CONSTRAINTS:\n${JSON.stringify(payload.constraints)}`
+function planMessage(request) {
+  const constraints = Object.keys(request?.constraints || {}).length
+    ? `\n\nNORMALIZED USER CONSTRAINTS:\n${JSON.stringify(request.constraints)}`
     : '';
-  return `Create a NEW campaign manifest from this creative brief. Do not treat this as a revision.\n\nBRIEF:\n${brief}${constraints}`;
+  return `Create a NEW campaign manifest. Do not treat this as a revision.\n\nCREATIVE BRIEF:\n${request.enrichedBrief}${constraints}`;
 }
 
-function revisionMessage(payload) {
-  const instruction = assertText(payload?.instruction ?? payload?.message, 'instruction');
-  return `Revise the existing campaign according to this instruction. Preserve every unrelated decision materially unchanged.\n\nREVISION INSTRUCTION:\n${instruction}`;
+function revisionMessage(request) {
+  const instruction = request.rawBrief
+    || 'Improve the existing campaign by resolving production weaknesses while preserving its core concept and all unrelated decisions.';
+  return `Revise the existing campaign according to this instruction. Preserve every unrelated decision materially unchanged. If the instruction is vague, make the smallest useful improvement rather than changing the concept.\n\nREVISION INSTRUCTION:\n${instruction}`;
 }
 
 function apiInfo() {
@@ -501,27 +650,65 @@ export const handler = async (event) => {
     }
 
     if (method === 'POST' && path === '/v1/plan') {
+      const request = prepareCreativeRequest(payload);
       const result = await invokeDirector({
-        message: planMessage(payload),
+        message: planMessage(request),
         campaign: null,
+        request,
+        isRevision: false,
       });
+      const qa = evaluateCampaign(result.campaign);
       return response(200, {
         campaign: result.campaign,
-        qa: evaluateCampaign(result.campaign),
-        meta: { operation: 'plan', modelId: MODEL_ID, usage: result.usage, requestId },
+        qa,
+        meta: {
+          operation: 'plan',
+          modelId: result.modelId,
+          usage: result.usage,
+          promptQuality: request.quality,
+          assumptions: request.assumptions,
+          automaticRepairUsed: result.repairUsed,
+          degradedFallbackUsed: result.degradedFallbackUsed,
+          initialQaScore: result.initialQa?.score ?? null,
+          finalQaScore: qa.score,
+          requestId,
+        },
       });
     }
 
     if (method === 'POST' && path === '/v1/revise') {
       const campaign = assertCampaign(payload?.campaign);
-      const result = await invokeDirector({
-        message: revisionMessage(payload),
-        campaign,
+      const request = prepareCreativeRequest({
+        brief: payload?.instruction ?? payload?.message ?? '',
+        constraints: {
+          platform: campaign.platform,
+          aspectRatio: campaign.aspectRatio,
+          durationSeconds: campaign.durationSeconds,
+          audience: campaign.audience,
+        },
       });
+      const result = await invokeDirector({
+        message: revisionMessage(request),
+        campaign,
+        request,
+        isRevision: true,
+      });
+      const qa = evaluateCampaign(result.campaign);
       return response(200, {
         campaign: result.campaign,
-        qa: evaluateCampaign(result.campaign),
-        meta: { operation: 'revise', modelId: MODEL_ID, usage: result.usage, requestId },
+        qa,
+        meta: {
+          operation: 'revise',
+          modelId: result.modelId,
+          usage: result.usage,
+          promptQuality: request.quality,
+          assumptions: request.assumptions,
+          automaticRepairUsed: result.repairUsed,
+          degradedFallbackUsed: result.degradedFallbackUsed,
+          initialQaScore: result.initialQa?.score ?? null,
+          finalQaScore: qa.score,
+          requestId,
+        },
       });
     }
 

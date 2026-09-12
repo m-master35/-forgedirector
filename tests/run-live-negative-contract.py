@@ -37,6 +37,7 @@ cases=[
     ("malformed-json","/v1/plan",'{"brief":',400,True,True),
     ("oversized-json","/v1/plan",'{"brief":"'+("x"*125000)+'"}',413,True,True),
     ("upload-missing-content-type","/v1/uploads",{},400,True,False),
+    ("upload-missing-size","/v1/uploads",{"contentType":"video/mp4"},400,True,False),
     ("upload-unsupported-content-type","/v1/uploads",{"contentType":"application/pdf","sizeBytes":100},400,True,False),
     ("upload-zero-size","/v1/uploads",{"contentType":"video/mp4","sizeBytes":0},400,True,False),
     ("upload-too-large","/v1/uploads",{"contentType":"video/mp4","sizeBytes":31457281},400,True,False),
@@ -58,6 +59,67 @@ for name,path,body,expected,auth,raw in cases:
     rows.append((name,status,expected,error,request_id,ok))
     if not ok:
         failures.append(f"{name}: expected {expected} with error+requestId, got {status} {data}")
+
+
+# Verify that an uploaded object is deleted even when analysis request validation
+# rejects the request before Bedrock runs.
+fake_video=b"not-a-real-video-but-valid-for-pre-model-validation"
+status,upload=request("/v1/uploads",{
+    "contentType":"video/mp4",
+    "sizeBytes":len(fake_video),
+})
+if status==200:
+    upload_url=upload.get("upload",{}).get("uploadUrl")
+    asset_id=upload.get("upload",{}).get("assetId")
+    put_status=0
+    try:
+        put_req=urllib.request.Request(
+            upload_url,
+            data=fake_video,
+            headers={
+                "content-type":"video/mp4",
+                "content-length":str(len(fake_video)),
+            },
+            method="PUT",
+        )
+        with urllib.request.urlopen(put_req,timeout=30) as put_resp:
+            put_status=put_resp.status
+    except urllib.error.HTTPError as e:
+        put_status=e.code
+    except Exception:
+        put_status=0
+
+    invalid_status,invalid_body=request("/v1/analyze",{
+        "assetId":asset_id,
+        "objective":"definitely-not-valid",
+    })
+    second_status,second_body=request("/v1/analyze",{"assetId":asset_id})
+    cleanup_ok=(
+        put_status in (200,201)
+        and invalid_status==400
+        and second_status==404
+        and bool(invalid_body.get("requestId"))
+        and bool(second_body.get("requestId"))
+    )
+    rows.append((
+        "rejected-analysis-cleans-upload",
+        second_status if cleanup_ok else invalid_status,
+        404,
+        "asset deleted after validation rejection" if cleanup_ok else str({
+            "put":put_status,
+            "invalid":invalid_status,
+            "second":second_status,
+        }),
+        second_body.get("requestId") if isinstance(second_body,dict) else None,
+        cleanup_ok,
+    ))
+    if not cleanup_ok:
+        failures.append(
+            f"rejected-analysis-cleans-upload: put={put_status}, invalid={invalid_status}, second={second_status}"
+        )
+else:
+    failures.append(f"rejected-analysis-cleans-upload: could not create upload, HTTP {status} {upload}")
+
 
 # Method mismatch should be a clean 404 JSON error as well.
 status,data=request("/v1/plan",None,method="GET",auth=True)

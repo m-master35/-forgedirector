@@ -38,6 +38,7 @@ The response returns:
 - `upload.uploadUrl`
 - `upload.method` = `PUT`
 - the required upload Content-Type header
+- the required upload Content-Length header (matching `sizeBytes`)
 - the URL expiry
 - the maximum accepted file size
 
@@ -128,7 +129,8 @@ Use the RapidAPI Hub endpoint UI, not the separate Requests workspace.
 Test:
 1. `GET /health` → expect HTTP 200.
 2. `POST /v1/plan` → expect HTTP 200 through RapidAPI.
-3. `POST /v1/uploads` → expect HTTP 200 and an `assetId` plus `uploadUrl`.
+3. `POST /v1/uploads` → send both `contentType` and exact `sizeBytes`; expect HTTP 200 and an `assetId` plus `uploadUrl`.
+4. For plan/revise responses, verify `meta.qualityGate.passed == true`. This is the authoritative production-release verdict; `meta.creativeQuality` may be advisory when a deterministic recovery path was used.
 
 A direct request to the AWS `/v1/*` URL without RapidAPI is supposed to return 401. That proves the gateway lock is active.
 

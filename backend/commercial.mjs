@@ -334,17 +334,31 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     let first;
     try {
       first = await attempt(MODEL_ID);
-      if (first.critique) return first;
     } catch {
       first = null;
     }
 
-    if (VIDEO_FALLBACK_MODEL_ID && VIDEO_FALLBACK_MODEL_ID !== MODEL_ID) {
+    const needsSecondOpinion = !first?.critique || critiqueNeedsRepair(first.critique);
+    if (
+      needsSecondOpinion
+      && VIDEO_FALLBACK_MODEL_ID
+      && VIDEO_FALLBACK_MODEL_ID !== MODEL_ID
+    ) {
       try {
         const fallback = await attempt(VIDEO_FALLBACK_MODEL_ID);
-        if (fallback.critique) return fallback;
+        if (fallback.critique) {
+          if (!first?.critique) return fallback;
+          if (fallback.critique.passed && !first.critique.passed) return fallback;
+          if (
+            fallback.critique.passed === first.critique.passed
+            && fallback.critique.score >= first.critique.score
+          ) return fallback;
+          // When both critics still reject the candidate, prefer the stronger
+          // model's diagnosis so the repair pass targets the harder standard.
+          if (!fallback.critique.passed && !first.critique.passed) return fallback;
+        }
       } catch {
-        // Return the primary failure below; caller can decide how to degrade.
+        // Fall back to the primary critic result below.
       }
     }
 

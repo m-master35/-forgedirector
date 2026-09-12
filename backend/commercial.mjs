@@ -1130,10 +1130,58 @@ async function invokeVideoAnalysis({ asset, payload }) {
     throw error;
   }
 
-  const analysis = normalizeVideoAnalysis(
+  let analysis = normalizeVideoAnalysis(
     parsed,
-    { objective, requirements, hasTranscript: Boolean(transcript) },
+    {
+      objective,
+      requirements,
+      hasTranscript: Boolean(transcript),
+      declaredDurationSeconds,
+    },
   );
+
+  let coverageRetryUsed = false;
+  if (
+    declaredDurationSeconds
+    && analysis?.coverage?.fullDurationReviewed === false
+  ) {
+    retryUsed = true;
+    coverageRetryUsed = true;
+
+    const coverageRecoveryPrompt = `${prompt}\n\nFULL-DURATION RECOVERY REQUIRED: Your previous timeline did not demonstrate inspection of the complete declared ${declaredDurationSeconds}-second video. Reinspect the ENTIRE supplied clip from first frame through final frame. Return chronological timeline segments spanning opening, middle, and end. The final timeline endSeconds must reach at least 85% of ${declaredDurationSeconds}. Re-evaluate continuity, CTA, mustShow, mustNotShow, mustIncludeText, and all other requirements using evidence from the whole clip. Do not state that analysis is limited to the first three seconds.`;
+
+    if (VIDEO_FALLBACK_MODEL_ID) {
+      usedModelId = VIDEO_FALLBACK_MODEL_ID;
+      fallbackUsed = usedModelId !== MODEL_ID;
+    }
+
+    result = await sendAnalysis(usedModelId, coverageRecoveryPrompt);
+    rawText = extractText(result);
+    parsed = parseVideoAnalysisModelJson(rawText);
+
+    if (hasSubstantiveVideoAnalysis(parsed)) {
+      analysis = normalizeVideoAnalysis(
+        parsed,
+        {
+          objective,
+          requirements,
+          hasTranscript: Boolean(transcript),
+          declaredDurationSeconds,
+        },
+      );
+    }
+  }
+
+  if (
+    declaredDurationSeconds
+    && analysis?.coverage?.fullDurationReviewed === false
+  ) {
+    const error = new Error(
+      `The video was received, but ForgeDirector could not verify full-duration coverage through the declared ${declaredDurationSeconds} seconds. No partial-video QA verdict was returned.`,
+    );
+    error.statusCode = 422;
+    throw error;
+  }
 
   return {
     analysis,
@@ -1142,6 +1190,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     objective,
     requirements,
     retryUsed,
+    coverageRetryUsed,
     fallbackUsed,
     modelId: usedModelId,
   };
@@ -1246,6 +1295,7 @@ export const handler = async (event) => {
             objective: result.objective,
             requirementsApplied: Object.keys(result.requirements || {}).length > 0,
             analysisRetryUsed: result.retryUsed,
+            coverageRetryUsed: result.coverageRetryUsed,
             fallbackModelUsed: result.fallbackUsed,
             asset: {
               id: asset.assetId,

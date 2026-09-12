@@ -100,8 +100,14 @@ def assert_campaign(name, status, data):
         errors.append("missing creativeQuality meta")
     else:
         if creative_quality.get("passed") is not True:
-            errors.append(f"creativeQuality.passed={creative_quality.get('passed')}")
-        if int(creative_quality.get("score") or 0) < 82:
+            errors.append(
+                f"creativeQuality.passed={creative_quality.get('passed')} "
+                f"score={creative_quality.get('score')} "
+                f"weak={creative_quality.get('weakDimensions')} "
+                f"dims={creative_quality.get('dimensions')} "
+                f"improvements={creative_quality.get('improvements')}"
+            )
+        if int(creative_quality.get("score") or 0) < 86:
             errors.append(f"creativeQuality.score={creative_quality.get('score')}")
         if creative_quality.get("blockingIssues"):
             errors.append(f"creative blockers={creative_quality.get('blockingIssues')}")

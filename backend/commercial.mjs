@@ -370,6 +370,56 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
   let briefEnrichment = null;
   let briefEnrichmentUsed = false;
 
+  const zeroSignalPrompt = !isRevision
+    && (
+      request?.quality?.issues?.includes('missing_brief')
+      || (
+        request?.quality?.issues?.includes('noisy_brief')
+        && !String(request?.rawBrief || '').match(/[a-z0-9]{3,}/i)
+      )
+    );
+
+  if (zeroSignalPrompt) {
+    const deterministicEnrichment = normalizeBriefEnrichment({}, request);
+    const quickCampaign = buildGuaranteedCampaign({
+      request,
+      briefEnrichment: deterministicEnrichment,
+      previousCampaign: null,
+      isRevision: false,
+    });
+    const quickQa = evaluateCampaign(quickCampaign);
+    const quickAssessment = assessGuaranteedCampaign(quickCampaign);
+
+    if (quickQa.passed && quickQa.score >= 90 && quickAssessment.passed) {
+      try {
+        const criticResult = await runCreativeCritic(quickCampaign);
+        if (criticResult.critique?.passed) {
+          return {
+            campaign: validateManifest(quickCampaign),
+            usage: null,
+            repairUsed: false,
+            rescueRewriteUsed: false,
+            candidateTournamentUsed: false,
+            candidateTournamentAttempts: 0,
+            deterministicQualityFallbackUsed: false,
+            guaranteedBlueprintUsed: true,
+            guaranteedBlueprintAssessment: quickAssessment,
+            briefEnrichmentUsed: true,
+            briefEnrichment: deterministicEnrichment,
+            degradedFallbackUsed: true,
+            modelId: null,
+            initialQa: quickQa,
+            creativeCritique: criticResult.critique,
+            criticUsage: criticResult.usage,
+          };
+        }
+      } catch {
+        // Continue into the full recovery pipeline if the quick quality check
+        // cannot be completed reliably.
+      }
+    }
+  }
+
   if (!isRevision && request?.quality?.tier !== 'good' && MODEL_ID) {
     const enrichWithModel = async (modelId) => client.send(new ConverseCommand({
       modelId,

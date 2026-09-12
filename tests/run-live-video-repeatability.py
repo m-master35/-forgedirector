@@ -106,11 +106,17 @@ for item in SOURCES:
             rows.append((item["name"],run,us,"upload-fail","-","-"))
             failures.append(f"{item['name']} run {run}: upload failed HTTP {us}")
             continue
+        probe=subprocess.run(
+            ["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(path)],
+            capture_output=True,text=True,check=True,
+        )
+        duration=float(probe.stdout.strip())
         payload={
             "assetId":asset,
             "platform":"General",
             "objective":"awareness",
-            "context":"Repeatability benchmark. Audio removed. Judge visible facts only.",
+            "durationSeconds":duration,
+            "context":"Repeatability benchmark. Audio removed. Judge visible facts only across the entire clip.",
             "requirements":item["requirements"],
         }
         start=time.time()
@@ -133,8 +139,16 @@ for item in SOURCES:
             failures.append(f"{item['name']} run {run}: "+ "; ".join(mismatches))
         if not speech_clean:
             failures.append(f"{item['name']} run {run}: hallucinated speech")
+        coverage=(analysis.get("coverage") or {})
+        coverage_ok=coverage.get("fullDurationReviewed") is True
+        if not coverage_ok:
+            failures.append(
+                f"{item['name']} run {run}: incomplete duration coverage "
+                f"{coverage.get('observedThroughSeconds')}/{coverage.get('declaredDurationSeconds')}"
+            )
         gate=(analysis.get("qualityGate") or {}).get("action")
-        rows.append((item["name"],run,status,"pass" if not mismatches else "FAIL",gate,elapsed))
+        verdict="pass" if (not mismatches and speech_clean and coverage_ok) else "FAIL"
+        rows.append((item["name"],run,status,verdict,gate,elapsed))
 
 print("# ForgeDirector video QA repeatability benchmark")
 print()
@@ -148,7 +162,7 @@ if failures:
     for f in failures: print(f"- {f}")
 else:
     print("## Result")
-    print(f"- PASS: {len(rows)}/{len(rows)} repeated real-video analyses met all compliance and no-speech requirements.")
+    print(f"- PASS: {len(rows)}/{len(rows)} repeated real-video analyses met compliance, no-speech, and full-duration coverage requirements.")
 
 with open("/tmp/video-repeatability-summary.md","w") as f:
     f.write("# ForgeDirector video QA repeatability\n\n")

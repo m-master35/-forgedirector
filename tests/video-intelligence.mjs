@@ -515,4 +515,25 @@ assert.equal(singleVerifierConsensus.compliance.status, 'needs_review');
 assert.equal(singleVerifierConsensus.compliance.checks[0].status, 'uncertain');
 assert.equal(singleVerifierConsensus.agreement.singleVerifierChecks, 1);
 
+const incompleteVerifierCoverage = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 0, endSeconds: 3 },
+    { startSeconds: 3, endSeconds: 6 },
+  ],
+}, 10);
+assert.equal(incompleteVerifierCoverage.fullDurationReviewed, false);
+assert.equal(isAuthoritativeVerifierCoverage(incompleteVerifierCoverage, 10), false);
+
+const authoritativeVerifierCoverage = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 0, endSeconds: 4 },
+    { startSeconds: 4, endSeconds: 8 },
+    { startSeconds: 8, endSeconds: 10 },
+  ],
+}, 10);
+assert.equal(authoritativeVerifierCoverage.fullDurationReviewed, true);
+assert.equal(isAuthoritativeVerifierCoverage(authoritativeVerifierCoverage, 10), true);
+assert.equal(isAuthoritativeVerifierCoverage({ fullDurationReviewed: true, coverageRatio: 0.96, startedAtBeginning: false, reachedFinalSegment: true }, 10), false);
+assert.equal(isAuthoritativeVerifierCoverage({ fullDurationReviewed: true, coverageRatio: 0.96, startedAtBeginning: true, reachedFinalSegment: false }, 10), false);
+
 console.log('Video intelligence tests passed');

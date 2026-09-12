@@ -158,6 +158,26 @@ if failures:
 else:
     print("## Result")
     print(f"- PASS: {len(rows)}/{len(rows)} repeated real-video analyses met compliance, no-speech, full-duration coverage, tighter score-stability, and quality-gate stability requirements.")
+evidence={
+    "clips":len(SOURCES),
+    "runsPerClip":RUNS_PER_CASE,
+    "calls":len(rows),
+    "maxOverallRange":MAX_OVERALL_RANGE,
+    "maxHookRange":MAX_HOOK_RANGE,
+    "rows":[
+        {"clip":r[0],"run":r[1],"http":r[2],"compliance":r[3],"gate":r[4],"seconds":r[5]}
+        for r in rows
+    ],
+    "stability":[
+        {"clip":name,"overallRange":overall_range,"hookRange":hook_range,"gateSpan":gate_span,"stable":stable}
+        for name,overall_range,hook_range,gate_span,stable in stability_rows
+    ],
+    "failures":failures,
+    "result":"PASS" if not failures else "FAIL",
+}
+with open("/tmp/video-repeatability-results.json","w") as f:
+    json.dump(evidence,f,indent=2)
+
 with open("/tmp/video-repeatability-summary.md","w") as f:
     f.write("# ForgeDirector video QA repeatability\n\n")
     f.write(f"- Calls: {len(rows)}\n- Clips: {len(SOURCES)}\n- Runs per clip: {RUNS_PER_CASE}\n- Max overall range: {MAX_OVERALL_RANGE}\n- Max hook range: {MAX_HOOK_RANGE}\n- Failures: {len(failures)}\n- Result: {'PASS' if not failures else 'FAIL'}\n")

@@ -38,6 +38,18 @@ SOURCES=[
         "requirements":{"mustShow":["person","gooseneck pour-over kettle"],"mustNotShow":["hand coffee grinder"]},
         "expected":[("mustShow","person","pass"),("mustShow","gooseneck pour-over kettle","pass"),("mustNotShow","hand coffee grinder","pass")],
     },
+    {
+        "name":"camber-grinder",
+        "url":"https://raw.githubusercontent.com/coleam00/ai-content-factory/main/sample-videos/camber-grinder-ugc-10s.mp4",
+        "requirements":{"mustShow":["person","manual hand coffee grinder"],"mustNotShow":["gooseneck kettle"]},
+        "expected":[("mustShow","person","pass"),("mustShow","manual hand coffee grinder","pass"),("mustNotShow","gooseneck kettle","pass")],
+    },
+    {
+        "name":"cosmetic-jars",
+        "url":"https://raw.githubusercontent.com/arjungithu53/zeroshot_studio/main/sample-output/shot_3.3.1_sample_clip.mp4",
+        "requirements":{"mustShow":["cosmetic balm jar or cosmetic jars"],"mustNotShow":["motorcycle"]},
+        "expected":[("mustShow","cosmetic balm jar or cosmetic jars","pass"),("mustNotShow","motorcycle","pass")],
+    },
 ]
 
 RUNS_PER_CASE=3
@@ -98,6 +110,7 @@ def find_check(analysis,typ,rule):
 
 rows=[]
 failures=[]
+observations={item["name"]:{"overall":[],"hook":[],"gate":[]} for item in SOURCES}
 for item in SOURCES:
     path=download_normalize(item)
     for run in range(1,RUNS_PER_CASE+1):
@@ -147,8 +160,34 @@ for item in SOURCES:
                 f"{coverage.get('observedThroughSeconds')}/{coverage.get('declaredDurationSeconds')}"
             )
         gate=(analysis.get("qualityGate") or {}).get("action")
+        overall=(analysis.get("scores") or {}).get("overall")
+        hook=(analysis.get("scores") or {}).get("hook")
+        if isinstance(overall,(int,float)):
+            observations[item["name"]]["overall"].append(float(overall))
+        if isinstance(hook,(int,float)):
+            observations[item["name"]]["hook"].append(float(hook))
+        if gate:
+            observations[item["name"]]["gate"].append(gate)
         verdict="pass" if (not mismatches and speech_clean and coverage_ok) else "FAIL"
         rows.append((item["name"],run,status,verdict,gate,elapsed))
+
+gate_rank={"regenerate":0,"revise":1,"accept":2}
+stability_rows=[]
+for item in SOURCES:
+    name=item["name"]
+    obs=observations[name]
+    overall_range=(max(obs["overall"])-min(obs["overall"])) if len(obs["overall"])>=2 else 0
+    hook_range=(max(obs["hook"])-min(obs["hook"])) if len(obs["hook"])>=2 else 0
+    ranks=[gate_rank[g] for g in obs["gate"] if g in gate_rank]
+    gate_span=(max(ranks)-min(ranks)) if len(ranks)>=2 else 0
+    stable=overall_range<=20 and hook_range<=25 and gate_span<=1
+    stability_rows.append((name,overall_range,hook_range,gate_span,stable))
+    if overall_range>20:
+        failures.append(f"{name}: overall score range too wide: {overall_range:.1f}")
+    if hook_range>25:
+        failures.append(f"{name}: hook score range too wide: {hook_range:.1f}")
+    if gate_span>1:
+        failures.append(f"{name}: quality gate flipped between accept and regenerate")
 
 print("# ForgeDirector video QA repeatability benchmark")
 print()
@@ -157,15 +196,22 @@ print("|---|---:|---:|---|---|---:|")
 for row in rows:
     print(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} | {row[5]} |")
 print()
+print("## Score and gate stability")
+print("| Clip | Overall range | Hook range | Gate span | Stable |")
+print("|---|---:|---:|---:|---|")
+for name,overall_range,hook_range,gate_span,stable in stability_rows:
+    print(f"| {name} | {overall_range:.1f} | {hook_range:.1f} | {gate_span} | {'yes' if stable else 'NO'} |")
+
+print()
 if failures:
     print("## Failures")
     for f in failures: print(f"- {f}")
 else:
     print("## Result")
-    print(f"- PASS: {len(rows)}/{len(rows)} repeated real-video analyses met compliance, no-speech, and full-duration coverage requirements.")
+    print(f"- PASS: {len(rows)}/{len(rows)} repeated real-video analyses met compliance, no-speech, full-duration coverage, score-stability, and quality-gate stability requirements.")
 
 with open("/tmp/video-repeatability-summary.md","w") as f:
     f.write("# ForgeDirector video QA repeatability\n\n")
-    f.write(f"- Calls: {len(rows)}\n- Failures: {len(failures)}\n- Result: {'PASS' if not failures else 'FAIL'}\n")
+    f.write(f"- Calls: {len(rows)}\n- Clips: {len(SOURCES)}\n- Runs per clip: {RUNS_PER_CASE}\n- Failures: {len(failures)}\n- Result: {'PASS' if not failures else 'FAIL'}\n")
 
 raise SystemExit(2 if failures else 0)

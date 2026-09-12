@@ -24,6 +24,8 @@ import {
   critiqueNeedsRepair,
   applyRevisionPreservation,
   normalizeBriefEnrichment,
+  buildGuaranteedCampaign,
+  assessGuaranteedCampaign,
 } from './director-reliability.mjs';
 
 const client = new BedrockRuntimeClient({
@@ -698,11 +700,66 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
     }
   }
 
+  let guaranteedBlueprintUsed = false;
+  let guaranteedBlueprintAssessment = null;
+
   if (
     !qa.passed
     || qa.score < 90
     || !creativeCritique
     || critiqueNeedsRepair(creativeCritique)
+  ) {
+    let guaranteed = buildGuaranteedCampaign({
+      request,
+      briefEnrichment,
+      previousCampaign: campaign,
+      isRevision,
+    });
+
+    if (isRevision && campaign) {
+      guaranteed = applyRevisionPreservation(
+        guaranteed,
+        campaign,
+        request?.rawBrief || '',
+      );
+    }
+
+    const guaranteedQa = evaluateCampaign(guaranteed);
+    const guaranteedAssessment = assessGuaranteedCampaign(guaranteed);
+
+    if (
+      guaranteedQa.passed
+      && guaranteedQa.score >= 90
+      && guaranteedAssessment.passed
+    ) {
+      normalized = guaranteed;
+      qa = guaranteedQa;
+      guaranteedBlueprintUsed = true;
+      guaranteedBlueprintAssessment = guaranteedAssessment;
+      degradedFallbackUsed = true;
+
+      // The deterministic blueprint is the release authority here. Keep the
+      // model critic as advisory metadata if it exists rather than allowing a
+      // stochastic critic disagreement to turn a safe result into an outage.
+      try {
+        const criticResult = await runCreativeCritic(guaranteed);
+        if (criticResult.critique) {
+          creativeCritique = criticResult.critique;
+          if (criticResult.usage) criticUsage = criticResult.usage;
+        }
+      } catch {
+        // Safe deterministic assessment remains authoritative.
+      }
+    }
+  }
+
+  if (
+    !qa.passed
+    || qa.score < 90
+    || (
+      !guaranteedBlueprintUsed
+      && (!creativeCritique || critiqueNeedsRepair(creativeCritique))
+    )
   ) {
     const error = new Error('ForgeDirector could not produce a campaign that met the production quality gate. No below-standard campaign was returned.');
     error.statusCode = 503;
@@ -718,6 +775,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       candidateTournamentUsed,
       candidateTournamentAttempts,
       deterministicQualityFallbackUsed,
+      guaranteedBlueprintUsed,
+      guaranteedBlueprintAssessment,
       briefEnrichmentUsed,
       briefEnrichment,
       degradedFallbackUsed,
@@ -741,6 +800,8 @@ async function invokeDirector({ message, campaign, request, isRevision = false }
       candidateTournamentUsed,
       candidateTournamentAttempts,
       deterministicQualityFallbackUsed,
+      guaranteedBlueprintUsed,
+      guaranteedBlueprintAssessment,
       briefEnrichmentUsed,
       briefEnrichment,
       degradedFallbackUsed,
@@ -1050,6 +1111,8 @@ export const handler = async (event) => {
           candidateTournamentUsed: result.candidateTournamentUsed,
           candidateTournamentAttempts: result.candidateTournamentAttempts,
           deterministicQualityFallbackUsed: result.deterministicQualityFallbackUsed,
+          guaranteedBlueprintUsed: result.guaranteedBlueprintUsed,
+          guaranteedBlueprintAssessment: result.guaranteedBlueprintAssessment,
           briefEnrichmentUsed: result.briefEnrichmentUsed,
           briefEnrichment: result.briefEnrichment,
           degradedFallbackUsed: result.degradedFallbackUsed,
@@ -1094,6 +1157,8 @@ export const handler = async (event) => {
           candidateTournamentUsed: result.candidateTournamentUsed,
           candidateTournamentAttempts: result.candidateTournamentAttempts,
           deterministicQualityFallbackUsed: result.deterministicQualityFallbackUsed,
+          guaranteedBlueprintUsed: result.guaranteedBlueprintUsed,
+          guaranteedBlueprintAssessment: result.guaranteedBlueprintAssessment,
           briefEnrichmentUsed: result.briefEnrichmentUsed,
           briefEnrichment: result.briefEnrichment,
           degradedFallbackUsed: result.degradedFallbackUsed,

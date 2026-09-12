@@ -4,6 +4,7 @@ import {
   buildVideoAnalysisPrompt,
   normalizeVideoAnalysis,
   normalizeVideoCompliance,
+  consensusVideoCompliance,
   applyVerifiedVideoCompliance,
   assessVideoAnalysisCoverage,
   videoFormatFromContentType,
@@ -439,5 +440,79 @@ assert.equal(mainAnalysisForOverride.compliance.status, 'pass');
 const overriddenByBlindVerifier = applyVerifiedVideoCompliance(mainAnalysisForOverride, blindCompliance);
 assert.equal(overriddenByBlindVerifier.compliance.status, 'fail');
 assert.notEqual(overriddenByBlindVerifier.qualityGate.action, 'accept');
+
+
+const consensusPass = consensusVideoCompliance([
+  {
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'pass', evidence: 'Coffee mug is visible.', timestampSeconds: 2 },
+      { type: 'mustNotShow', rule: 'motorcycle', status: 'pass', evidence: 'No motorcycle observed.', timestampSeconds: null },
+    ],
+  },
+  {
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'pass', evidence: 'A mug is visibly held in frame.', timestampSeconds: 3 },
+      { type: 'mustNotShow', rule: 'motorcycle', status: 'pass', evidence: 'Motorcycle is absent from the clip.', timestampSeconds: null },
+    ],
+  },
+], {
+  mustShow: ['coffee mug'],
+  mustNotShow: ['motorcycle'],
+});
+assert.equal(consensusPass.compliance.status, 'pass');
+assert.equal(consensusPass.compliance.uncertainCount, 0);
+assert.equal(consensusPass.agreement.verifierCount, 2);
+assert.equal(consensusPass.agreement.unanimousChecks, 2);
+
+const consensusDisagreement = consensusVideoCompliance([
+  {
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'pass', evidence: 'Mug visible.', timestampSeconds: 1 },
+    ],
+  },
+  {
+    status: 'fail',
+    passed: false,
+    failedCount: 1,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'fail', evidence: 'No mug observed.', timestampSeconds: null },
+    ],
+  },
+], {
+  mustShow: ['coffee mug'],
+});
+assert.equal(consensusDisagreement.compliance.status, 'needs_review');
+assert.equal(consensusDisagreement.compliance.checks[0].status, 'uncertain');
+assert.equal(consensusDisagreement.agreement.disputedChecks, 1);
+
+const singleVerifierConsensus = consensusVideoCompliance([
+  {
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustNotShow', rule: 'giraffe', status: 'pass', evidence: 'No giraffe observed.', timestampSeconds: null },
+    ],
+  },
+], {
+  mustNotShow: ['giraffe'],
+});
+assert.equal(singleVerifierConsensus.compliance.status, 'needs_review');
+assert.equal(singleVerifierConsensus.compliance.checks[0].status, 'uncertain');
+assert.equal(singleVerifierConsensus.agreement.singleVerifierChecks, 1);
 
 console.log('Video intelligence tests passed');

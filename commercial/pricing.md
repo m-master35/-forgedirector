@@ -67,7 +67,17 @@ Do not increase quotas without rerunning `Benchmark Unit Economics` and represen
 
 Rapid currently retains 25% of API Hub payments before provider payout, so the commercial target should be reached with a small number of paid integrations rather than high free volume.
 
-At the current price points, roughly ten ULTRA customers produce $490 gross monthly marketplace revenue before RapidAPI fees, AWS, PayPal, and tax. The increased quotas are deliberate: current competing creative-scoring APIs make low-cost trials easy, while full native video analysis and production-spec QA justify materially higher per-analysis pricing than text-only or single-frame scoring.
+At $49/month, ten ULTRA customers produce $490 gross marketplace revenue. After Rapid's current 25% marketplace fee that is $367.50 before AWS, PayPal and tax.
+
+Using the measured 2026-09-13 production workload and the deliberately pessimistic all-EU-Nova-Pro cost ceiling, a fully exhausted ULTRA account using all ~500 complete video analyses could consume about $14 of Bedrock inference. At a 2026-09-13 USD/ZAR reference near R16.10/$1, the R5,000/month contribution target therefore requires approximately:
+
+- **~9 ULTRA customers** when paid users consume little expensive inference or frequently hit the analysis cache;
+- **~12 ULTRA customers** around the measured mixed-model fresh-analysis cost;
+- **~14 ULTRA customers** under the deliberately pessimistic assumption that every customer fully exhausts all ~500 analyses and every observed token is priced at the EU Nova Pro rate.
+
+These counts are before Lambda/S3, PayPal payout fees and tax. Treat **12–14 ULTRA customers** as the safer fully-utilized planning target until real customer usage distribution is known, rather than relying on the earlier “about ten” estimate.
+
+The increased quotas are deliberate: current competing creative-scoring APIs make low-cost trials easy, while full native video analysis, compliance verification, idempotent cached repeats and production-spec QA justify materially higher per-analysis value than text-only or single-frame scoring.
 
 The commercial thesis is now stronger than the original prompt-wrapper version: paid users are buying a repeatable video-ingestion and creative-analysis contract, not merely a system prompt.
 

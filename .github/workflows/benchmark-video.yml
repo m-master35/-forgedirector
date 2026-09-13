@@ -1,5 +1,6 @@
 name: Benchmark Live Video QA
 
+# Production regression benchmark for labeled real and synthetic video cases.
 on:
   workflow_dispatch:
   push:

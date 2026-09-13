@@ -123,18 +123,47 @@ Use the long description and keywords from `commercial/listing.md`.
 
 ## 5. Recommended launch plans
 
-Use hard limits and no overages initially.
+Use **two quota objects** on every public plan. Both must use **Hard Limits**. Do not enable launch overages.
 
-| Plan | Price | Monthly RapidAPI requests | Approx. complete video analyses |
-| --- | ---: | ---: | ---: |
-| BASIC | $0 | 20 | ~10 |
-| PRO | $19 | 100 | ~50 |
-| ULTRA | $49 | 300 | ~150 |
-| MEGA | $99 | 600 | ~300 |
+### Mandatory Requests object
 
-A complete video-analysis workflow normally consumes two RapidAPI requests: one upload-ticket request and one analysis request. The direct PUT to the private upload URL is not a ForgeDirector API request.
+| Plan | Price | Requests / month |
+| --- | ---: | ---: |
+| BASIC | $0 | 20 |
+| PRO | $25 | 250 |
+| ULTRA | $75 | 1,000 |
+| MEGA | $150 | 3,000 |
 
-These reduced launch quotas are intentional. Live production profiling measured a conservative upper model cost of about $0.136 for a fresh 120-second requirement-heavy analysis. The 100/300/600 paid request limits preserve positive inference margin even under unusually long, uncached usage.
+### Custom Video Analyses object
+
+In **Hub Listing → Monetize**, click **Add Object** and create:
+
+- **Name:** Video Analyses
+- **Description:** Full short-form video intelligence analyses
+- **Associated endpoint:** only `POST /v1/analyze`
+
+Add the object to every public plan with monthly **Hard Limits**:
+
+| Plan | Video Analyses / month |
+| --- | ---: |
+| BASIC | 5 |
+| PRO | 50 |
+| ULTRA | 200 |
+| MEGA | 500 |
+
+Do not associate `POST /v1/uploads`, `/v1/plan`, `/v1/revise`, `/v1/qa`, or `/health` with the Video Analyses object.
+
+A complete video-analysis workflow consumes two normal Requests (one upload-ticket call and one analyze call), while only `POST /v1/analyze` consumes one Video Analyses unit. The direct PUT to the private S3 upload URL is not a Rapid request.
+
+The separate analysis quota is required because fresh verified-video inference scales with duration. On the current production verifier, fresh benchmark ceilings were approximately:
+
+- 12s: $0.0207
+- 30s: $0.0351
+- 60s: $0.0605
+- 90s: $0.0887
+- 120s: $0.1167
+
+Those figures deliberately price every observed token at the Nova Pro reference rate even though production uses a cheaper mixed-model path. Cached identical analyses consume zero additional model tokens.
 
 ## 6. Final Hub test before publishing
 
@@ -154,7 +183,7 @@ Full upload + analyze testing is already automated in GitHub Actions against the
 
 Do not publish until:
 - all six endpoints are visible in the Hub,
-- the plans are correct,
+- the Requests and Video Analyses hard-limit quotas are correct,
 - the listing text is correct,
 - the provider payout setup is confirmed,
 - final publication approval has been given.

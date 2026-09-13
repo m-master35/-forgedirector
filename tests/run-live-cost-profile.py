@@ -136,7 +136,9 @@ def add_video(name,duration,requirements=None):
     if requirements: payload["requirements"]=requirements
     st,data,secs=http_json("/v1/analyze",payload,timeout=300)
     if st!=200:
-        failures.append(f"{name}: HTTP {st} {data.get('error','')}")
+        failures.append(
+            f"{name}: HTTP {st} {data.get('error','')} diagnostics={json.dumps(data.get('verifierDiagnostics'),sort_keys=True)}"
+        )
         return
     meta=data.get("meta") or {}
     cost=video_cost(meta)

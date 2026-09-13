@@ -281,13 +281,21 @@ export function buildVideoCompliancePrompt({
     declaredDurationSeconds
       ? (() => {
           const duration = Number(declaredDurationSeconds);
-          const minimumSegments = duration > 12 ? 3 : duration > 6 ? 2 : 1;
+          const targetWindowSeconds = duration > 30 ? 15 : duration > 12 ? 10 : 6;
+          const minimumSegments = Math.max(1, Math.ceil(duration / targetWindowSeconds));
+          const windowExamples = Array.from({ length: minimumSegments }, (_, index) => {
+            const start = Math.round((index * duration / minimumSegments) * 100) / 100;
+            const end = Math.round((((index + 1) * duration / minimumSegments)) * 100) / 100;
+            return `${start}-${end}s`;
+          }).join(', ');
           return [
             `TIMELINE EVIDENCE CONTRACT: cover at least 95% of the ${duration}-second clip.`,
-            'The first timeline entry must begin at 0 seconds (or as close as the video interface permits).',
-            `The final timeline entry must end at approximately ${duration} seconds and at minimum reach ${Math.round(duration * 0.95 * 100) / 100} seconds.`,
-            'Timeline intervals must be chronological and adjacent/overlapping; do not leave large unobserved gaps.',
-            `Return at least ${minimumSegments} timeline segment(s), with separate opening, middle, and ending evidence whenever the duration permits.`,
+            'Treat timeline entries as CONTIGUOUS REVIEW WINDOWS, not isolated event snippets.',
+            'The first review window must begin at 0 seconds (or as close as the video interface permits).',
+            `The final review window must end at approximately ${duration} seconds and at minimum reach ${Math.round(duration * 0.95 * 100) / 100} seconds.`,
+            'Review windows must be chronological and adjacent/overlapping; do not leave unreviewed gaps between them.',
+            `Return at least ${minimumSegments} review window(s). A suitable partition for this clip is approximately: ${windowExamples}.`,
+            'For a long clip, do NOT return only 1-3 second snippets around interesting events. Each window should represent the full span you reviewed, with evidence summarizing what is visible during that span.',
             'Do not claim full review unless your timeline itself demonstrates this coverage.',
           ].join(' ')
         })()

@@ -1198,6 +1198,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
   let complianceVerificationCoverage = null;
   let complianceVerificationAgreement = null;
   let complianceVerificationConsensusUsed = false;
+  let complianceVerificationDiagnostics = [];
 
   if (Object.keys(requirements || {}).length > 0) {
     complianceVerificationUsed = true;
@@ -1266,7 +1267,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     ].filter(Boolean))];
 
     const verificationRecords = [];
-    const verifierDiagnostics = [];
+    const verifierDiagnostics = complianceVerificationDiagnostics;
     let lastVerifierError = null;
     const verifierUsageTotals = {
       inputTokens: 0,
@@ -1510,7 +1511,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     complianceVerificationCoverage,
     complianceVerificationAgreement,
     complianceVerificationConsensusUsed,
-    complianceVerificationDiagnostics: verifierDiagnostics,
+    complianceVerificationDiagnostics,
   };
 }
 

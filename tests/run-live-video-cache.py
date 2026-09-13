@@ -5,6 +5,7 @@ from pathlib import Path
 API_URL=os.environ["API_URL"].rstrip("/")
 SECRET=os.environ["RAPIDAPI_PROXY_SECRET"]
 ROOT=Path(tempfile.mkdtemp(prefix="fd-cache-"))
+BENCH_NONCE=f"{os.environ.get('GITHUB_RUN_ID','local')}-{os.environ.get('GITHUB_RUN_ATTEMPT','1')}-{time.time_ns()}"
 URL="https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/short-video/sample-output/assets/short-video.mp4"
 
 def http_json(path,payload,timeout=180):
@@ -40,7 +41,7 @@ def analyze(path,duration):
       "platform":"General",
       "objective":"awareness",
       "durationSeconds":duration,
-      "context":"Cache idempotence benchmark. Audio removed. Judge visible facts only across the entire clip.",
+      "context":f"Cache idempotence benchmark {BENCH_NONCE}. Audio removed. Judge visible facts only across the entire clip.",
       "requirements":{"mustShow":["motorcycle"],"mustNotShow":["wine bottle"]},
     }
     start=time.time(); status,data=http_json("/v1/analyze",payload,timeout=180)

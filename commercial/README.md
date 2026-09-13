@@ -48,16 +48,16 @@ Infrastructure is defined in `../commercial-template.yaml` using AWS SAM.
 
 ## RapidAPI setup
 
-1. Create a provider API project in RapidAPI Studio.
-2. Import `openapi.yaml`.
-3. Set the AWS `CommercialApiBaseUrl` as the base URL.
-4. Configure BASIC / PRO / ULTRA / MEGA using `pricing.md`.
-5. Use `listing.md` for the marketplace copy and examples.
-6. Configure both the normal Requests quota and the custom **Video Analyses** quota from `pricing.md`; associate Video Analyses only with `POST /v1/analyze`.
-7. Copy the API-specific `X-RapidAPI-Proxy-Secret` from RapidAPI's security configuration.
-8. Redeploy the AWS stack with `RapidApiProxySecret` set to that value.
-9. Confirm direct calls without the secret receive `401` while RapidAPI test-console calls succeed.
-10. Publish only after all six endpoints return valid example responses and the manual release checklist is complete.
+1. Open the existing ForgeDirector provider project in RapidAPI Studio.
+2. Preserve the current AWS base URL and `X-RapidAPI-Proxy-Secret` configuration; that gateway lock is already proven live.
+3. Use `openapi.yaml` as the contract/reference for endpoint schemas. Do **not** replace the entire existing API by importing it unless you have confirmed Rapid will preserve the working gateway/security configuration.
+4. Add or verify the six endpoints listed above, especially `POST /v1/uploads` and `POST /v1/analyze`.
+5. Configure BASIC / PRO / ULTRA / MEGA using `pricing.md`.
+6. Configure both the mandatory Requests quota and the custom **Video Analyses** quota from `pricing.md`; associate Video Analyses only with `POST /v1/analyze`.
+7. Use `listing.md` for the marketplace identity, copy, examples and keywords.
+8. Confirm direct calls without the proxy secret receive `401` while RapidAPI Hub test-console calls succeed.
+9. Keep the API PRIVATE until every item in `RAPIDAPI-FINISH.md` and `RELEASE-READINESS.md` is checked.
+10. Publish only after explicit owner approval.
 
 ## Cost controls
 

@@ -1,0 +1,40 @@
+name: Benchmark Video Analysis Cache
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/benchmark-video-cache.yml
+      - tests/run-live-video-cache.py
+      - backend/storage.mjs
+      - backend/commercial.mjs
+      - commercial-template.yaml
+permissions:
+  contents: read
+  id-token: write
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorVideoCacheBenchmark
+          mask-aws-account-id: true
+      - id: api
+        name: Resolve live API URL
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name forgedirector-commercial --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue" --output text)
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Verify analysis-cache idempotence
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: python tests/run-live-video-cache.py

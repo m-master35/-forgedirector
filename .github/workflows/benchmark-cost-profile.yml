@@ -1,5 +1,7 @@
 name: Benchmark Unit Cost
 
+# Long-video release economics probe.
+
 on:
   workflow_dispatch:
   push:

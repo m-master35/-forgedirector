@@ -262,6 +262,13 @@ Return this JSON shape:
   }
 }`;
 
+export function minimumVideoCoverageSegments(declaredDurationSeconds = null) {
+  const duration = Number(declaredDurationSeconds);
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  const targetWindowSeconds = duration > 30 ? 15 : duration > 12 ? 10 : 6;
+  return Math.max(1, Math.ceil(duration / targetWindowSeconds));
+}
+
 export function buildVideoCompliancePrompt({
   requirements = {},
   declaredDurationSeconds = null,
@@ -281,8 +288,7 @@ export function buildVideoCompliancePrompt({
     declaredDurationSeconds
       ? (() => {
           const duration = Number(declaredDurationSeconds);
-          const targetWindowSeconds = duration > 30 ? 15 : duration > 12 ? 10 : 6;
-          const minimumSegments = Math.max(1, Math.ceil(duration / targetWindowSeconds));
+          const minimumSegments = minimumVideoCoverageSegments(duration);
           const windowExamples = Array.from({ length: minimumSegments }, (_, index) => {
             const start = Math.round((index * duration / minimumSegments) * 100) / 100;
             const end = Math.round((((index + 1) * duration / minimumSegments)) * 100) / 100;
@@ -1004,7 +1010,7 @@ export function assessVideoAnalysisCoverage(analysis, declaredDurationSeconds = 
 
   const coveredSeconds = merged.reduce((sum, interval) => sum + (interval.end - interval.start), 0);
   const coverageRatio = Math.max(0, Math.min(1, coveredSeconds / duration));
-  const minimumSegments = duration > 12 ? 3 : duration > 6 ? 2 : 1;
+  const minimumSegments = minimumVideoCoverageSegments(duration);
   const requiredCoverageRatio = 0.95;
   const startToleranceSeconds = Math.max(0.15, Math.min(0.5, duration * 0.05));
   const startedAtBeginning = intervals.length > 0

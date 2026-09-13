@@ -128,11 +128,13 @@ Use hard limits and no overages initially.
 | Plan | Price | Monthly RapidAPI requests | Approx. complete video analyses |
 | --- | ---: | ---: | ---: |
 | BASIC | $0 | 20 | ~10 |
-| PRO | $19 | 200 | ~100 |
-| ULTRA | $49 | 1,000 | ~500 |
-| MEGA | $99 | 3,000 | ~1,500 |
+| PRO | $19 | 100 | ~50 |
+| ULTRA | $49 | 300 | ~150 |
+| MEGA | $99 | 600 | ~300 |
 
 A complete video-analysis workflow normally consumes two RapidAPI requests: one upload-ticket request and one analysis request. The direct PUT to the private upload URL is not a ForgeDirector API request.
+
+These reduced launch quotas are intentional. Live production profiling measured a conservative upper model cost of about $0.136 for a fresh 120-second requirement-heavy analysis. The 100/300/600 paid request limits preserve positive inference margin even under unusually long, uncached usage.
 
 ## 6. Final Hub test before publishing
 

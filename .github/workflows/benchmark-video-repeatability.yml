@@ -1,6 +1,6 @@
 name: Benchmark Video QA Repeatability
 
-# Stochastic release gate for repeated genuine generated-video analysis.
+# Stochastic release gate for repeated genuine generated-video analysis. Re-run after contiguous-window verifier hardening.
 on:
   workflow_dispatch:
   push:

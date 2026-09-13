@@ -1,5 +1,17 @@
 # RapidAPI final manual finish — ForgeDirector
 
+## 0. Preserve the working gateway configuration
+
+The live AWS backend is already protected by the RapidAPI proxy secret, and direct `/v1/*` calls correctly return 401.
+
+For the existing RapidAPI project, **do not replace the whole API by importing `commercial/openapi.yaml` unless you have first confirmed that the current Base URL and secret/gateway configuration will be preserved**. Rapid's current documentation warns that updating an existing version from an OpenAPI document can override existing configuration.
+
+For the final launch pass, the safer path is:
+- keep the current working Base URL;
+- keep the current RapidAPI secret/gateway configuration;
+- add/verify only the missing endpoint definitions and marketplace fields;
+- leave visibility PRIVATE until the final publication decision.
+
 The AWS API is already live and protected by the RapidAPI proxy secret. Do not change the AWS base URL and do not expose the proxy secret to consumers.
 
 This checklist contains only the marketplace actions that cannot be completed from GitHub.

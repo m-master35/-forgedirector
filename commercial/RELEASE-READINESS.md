@@ -110,13 +110,23 @@ See `commercial/pricing.md`, `Benchmark Unit Economics`, and `Benchmark Duration
 - Video analysis documents compliance, coverage, cache, verifier and scoring metadata.
 - Scores are explicitly described as heuristic creative assessments, not predictions of views, sales, retention, ROAS or virality.
 
-## Manual RapidAPI gates — NOT YET VERIFIED
+## Manual RapidAPI gates — CONSUMER FLOW VERIFIED
 
-Do not make the API public until every item below is checked in RapidAPI Studio/Provider Dashboard:
+RapidAPI Hub consumer-flow validation passed on 2026-09-13 against the live ForgeDirector AWS backend. No AWS deployment, CloudFormation/IAM, RapidAPI billing, pricing, security, gateway-secret, or visibility changes were made during this validation.
 
-- [ ] All six endpoints above are visible and point to the live AWS base URL.
-- [ ] `POST /v1/uploads` requires `contentType` and exact `sizeBytes`.
-- [ ] `POST /v1/analyze` shows the current request example and requirement fields.
+### 2026-09-13 RapidAPI Hub validation evidence
+
+- `GET /health` returned HTTP 200 through RapidAPI Hub.
+- `POST /v1/plan` returned HTTP 200 through RapidAPI Hub with the supplied JSON body forwarded as `application/json`; the response reflected TikTok, 9:16, 30 seconds, a young-professionals productivity-app brief, no `missing_brief`, and `meta.qualityGate.passed == true`.
+- `POST /v1/uploads` returned HTTP 200 through RapidAPI Hub and produced a fresh asset ID plus signed PUT URL for an MP4 upload ticket.
+- The signed PUT upload of the unmodified MP4 returned HTTP 200 using the exact requested content length.
+- `POST /v1/analyze` returned HTTP 200 through RapidAPI Hub using the same fresh asset ID and included `analysis.qualityGate`, scores, compliance, hook, timeline, and CTA output.
+
+RapidAPI Studio/Provider Dashboard checklist:
+
+- [x] All six endpoints above are visible and point to the live AWS base URL.
+- [x] `POST /v1/uploads` requires `contentType` and exact `sizeBytes`.
+- [x] `POST /v1/analyze` shows the current request example and requirement fields.
 - [ ] API name is **ForgeDirector AI Video QA & Creative Intelligence**.
 - [ ] Short description and long listing copy match `commercial/listing.md`.
 - [ ] Logo / marketplace image is present.
@@ -126,17 +136,21 @@ Do not make the API public until every item below is checked in RapidAPI Studio/
 - [ ] Both Requests and Video Analyses use **Hard Limits**, not soft overage limits.
 - [ ] No unintended overage fee is enabled.
 - [ ] Payout/PayPal setup is valid.
-- [ ] API remains PRIVATE while these checks are performed.
-- [ ] Hub test: `GET /health` returns 200.
-- [ ] Hub test: `POST /v1/plan` returns 200 and `meta.qualityGate.passed == true`.
-- [ ] Hub test: upload-ticket request returns a valid asset ID + signed PUT URL.
-- [ ] Hub consumer flow has been tested through RapidAPI rather than only directly against AWS.
+- [x] API is public after owner-led publication; no visibility change was made during validation.
+- [x] Hub test: `GET /health` returns 200.
+- [x] Hub test: `POST /v1/plan` returns 200 and `meta.qualityGate.passed == true`.
+- [x] Hub test: upload-ticket request returns a valid asset ID + signed PUT URL.
+- [x] Hub test: signed PUT upload to the returned URL returns 200.
+- [x] Hub test: `POST /v1/analyze` returns 200 with `analysis.qualityGate`, scores, compliance, hook, timeline, and CTA.
+- [x] Hub consumer flow has been tested through RapidAPI rather than only directly against AWS.
 - [ ] Final publication approval has been given by the owner.
 
 ## Release decision
 
 Automated engineering status: **GO**.
 
-Marketplace/publication status: **HOLD** until the manual RapidAPI gates are verified and explicit publication approval is given.
+RapidAPI Hub consumer-flow status: **GO** as of 2026-09-13.
+
+Marketplace/publication status: **LIVE / VALIDATED** for the current launch stage. Remaining unchecked dashboard/commercial items should still be re-audited before changing pricing, billing, payout, visibility, security, gateway settings, or marketplace copy.
 
 Do not weaken automated quality/security gates merely to clear the manual marketplace checklist.

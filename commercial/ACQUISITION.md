@@ -31,7 +31,7 @@ Primary value:
 | StoryShort | Short-form generation/publishing API | hello@storyshort.ai | SENT | QA before automatic publishing. |
 | Reeloop | REST + SDKs + MCP + webhooks | support@reeloop.ai | SENT | QA before publish/delivery. |
 | AdGPT | Programmatic AI ad generation | support@adgpt.com | SENT | High-volume ad QA use case. |
-| MakeUGC | Platform API + MCP + webhook generation | help@makeugc.ai | SENT | Partner/API integration fit. |
+| MakeUGC | Platform API + MCP + webhook generation | help@makeugc.ai | SOFT NO / FUTURE MAYBE | Replied that they are pursuing a different internal route; keep on file and do not chase in the live-link follow-up. |
 | Reviral | AI image/video API + UGC workflows | support@reviral.ai | SENT | Model-agnostic QA after render. |
 | Wireflow | Multi-model video workflows + webhooks | andrew@wireflow.ai | SENT | Strong workflow-level QA integration. |
 | VideoGenAPI | Unified multi-model video API | support@videogenapi.com | SENT | QA as optional layer across 17 models. |
@@ -45,6 +45,27 @@ Do not send a new batch without owner approval. Once sent:
 - watch for direct replies;
 - tailor replies to the prospect's integration model;
 - do not offer custom enterprise commitments, discounts, exclusivity, or roadmap guarantees without explicit owner approval.
+
+## Live RapidAPI follow-up readiness
+
+RapidAPI Hub consumer-flow validation passed on 2026-09-13. The live RapidAPI follow-up is ready for the 12 still-open prospects below, but must not be sent without owner approval.
+
+Live API link for the prepared follow-up:
+https://rapidapi.com/mmaster35/api/forgedirector-video-creative-intelligence
+
+Follow-up list, excluding MakeUGC:
+- EzUGC — hello@ezugc.ai
+- Prizmad — hello@prizmad.com
+- agent-media — support@agent-media.ai
+- UGC Copilot — support@ugccopilot.ai
+- StoryShort — hello@storyshort.ai
+- Reeloop — support@reeloop.ai
+- AdGPT — support@adgpt.com
+- Reviral — support@reviral.ai
+- Wireflow — andrew@wireflow.ai
+- VideoGenAPI — support@videogenapi.com
+- AI Video API — support@aivideoapi.ai
+- VisionStory — collabs@visionstory.ai
 
 ## Evidence used in outreach
 

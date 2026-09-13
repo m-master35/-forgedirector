@@ -2,6 +2,10 @@
 
 **A conversational AI production director for the Amazon Developer Hackathon — Alexa+ Track.**
 
+> **Commercial API:** ForgeDirector is also an automated QA gate for AI-generated short-form video. Put it after your video generator to inspect the full clip, verify explicit production rules, and return a machine-readable **accept / revise / regenerate** decision plus ranked fixes and regeneration prompts.
+>
+> Built for AI-video products, UGC/ad generators, creative automation, and agentic media pipelines. The current production gate has passed **52/52 labeled compliance checks**, **29/29 full-duration coverage checks**, **28/28 no-speech hallucination checks**, and **30/30 repeated real-video analyses** on the recorded release benchmark. See [commercial/RELEASE-READINESS.md](commercial/RELEASE-READINESS.md).
+
 ForgeDirector turns a short campaign brief into a structured video-production manifest, then maintains project state as the user revises individual scenes, audiences, formats, durations, and continuity constraints through conversation.
 
 > Example: “Create a premium 30-second ad for a magnesium supplement aimed at young professionals.”
@@ -34,13 +38,25 @@ The v0.1 prototype includes:
 
 ## Commercial video-intelligence API
 
-The commercial API now extends ForgeDirector beyond planning into **video creative intelligence**.
+The commercial API extends ForgeDirector beyond planning into an opinionated **post-generation QA layer**.
+
+Instead of returning only a generic multimodal-model description, ForgeDirector is designed to answer the production question a downstream system actually needs:
+
+**Can I ship this generated clip, should I revise it, or should I regenerate it — and what exactly should change?**
 
 The intended production loop is:
 
 ```text
-PLAN → CREATE → ANALYZE → FIX → REGENERATE
+PLAN → CREATE → ANALYZE → VERIFY → ACCEPT / REVISE / REGENERATE
 ```
+
+### Best-fit integrations
+
+- AI UGC and ad-generation platforms that need an automated quality gate before delivery
+- multi-model video-generation products routing between Veo, Runway, Seedance, Kling, and similar engines
+- creative-automation systems generating many variants where manual review becomes a bottleneck
+- AI agents that need structured evidence and a deterministic next action rather than a free-form model opinion
+- internal creative-ops pipelines enforcing brand, text, continuity, CTA, and must-show/must-not-show rules
 
 Commercial endpoints:
 

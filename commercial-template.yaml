@@ -55,7 +55,7 @@ Resources:
           VIDEO_BUCKET: !Ref VideoAssetBucketName
           VIDEO_PREFIX: video-assets
           ANALYSIS_CACHE_PREFIX: analysis-cache
-          ANALYSIS_CACHE_TTL_SECONDS: '86400'
+          ANALYSIS_CACHE_TTL_SECONDS: '86400' # Private analysis results expire logically after 24 hours.
       Policies:
         - Statement:
             - Effect: Allow

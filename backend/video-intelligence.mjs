@@ -816,7 +816,13 @@ export function consensusVideoCompliance(verifications = [], requirements = {}) 
           && check?.rule === item.rule
           && ['pass', 'fail', 'uncertain'].includes(check?.status)
         ));
-        return match ? { ...match, verifierIndex } : null;
+        return match
+          ? {
+              ...match,
+              verifierIndex,
+              evidenceSource: verification?.evidenceSource || `verifier_${verifierIndex + 1}`,
+            }
+          : null;
       })
       .filter(Boolean);
 
@@ -826,13 +832,14 @@ export function consensusVideoCompliance(verifications = [], requirements = {}) 
         ...item,
         status: 'uncertain',
         evidence: only
-          ? `Only one independent blind verifier returned a usable verdict (${only.status}). A second verifier is required for an authoritative compliance decision.`
-          : 'No independent blind verifier returned a usable verdict for this requirement.',
+          ? `Only one usable compliance evidence source returned a verdict (${only.status}; source=${only.evidenceSource}). A second agreeing source is required for an authoritative compliance decision.`
+          : 'No usable compliance evidence source returned a verdict for this requirement.',
         timestampSeconds: only?.timestampSeconds ?? null,
         consensus: {
           verifierCount: observations.length,
           unanimous: false,
           statuses: observations.map((entry) => entry.status),
+          sources: observations.map((entry) => entry.evidenceSource),
         },
       };
     }
@@ -841,17 +848,18 @@ export function consensusVideoCompliance(verifications = [], requirements = {}) 
     const uniqueStatuses = [...new Set(statuses)];
     if (uniqueStatuses.length !== 1 || uniqueStatuses[0] === 'uncertain') {
       const evidence = observations
-        .map((entry, index) => `verifier ${index + 1}: ${entry.status} — ${String(entry.evidence || '').slice(0, 240)}`)
+        .map((entry) => `${entry.evidenceSource}: ${entry.status} — ${String(entry.evidence || '').slice(0, 240)}`)
         .join(' | ');
       return {
         ...item,
         status: 'uncertain',
-        evidence: `Independent blind verifiers did not reach a unanimous determinate verdict. ${evidence}`.slice(0, 800),
+        evidence: `Compliance evidence sources did not reach a unanimous determinate verdict. ${evidence}`.slice(0, 800),
         timestampSeconds: observations.find((entry) => Number.isFinite(Number(entry.timestampSeconds)))?.timestampSeconds ?? null,
         consensus: {
           verifierCount: observations.length,
           unanimous: false,
           statuses,
+          sources: observations.map((entry) => entry.evidenceSource),
         },
       };
     }
@@ -866,12 +874,13 @@ export function consensusVideoCompliance(verifications = [], requirements = {}) 
       ...item,
       status,
       evidence: evidenceParts.join(' | ').slice(0, 800)
-        || `Two independent blind verifiers unanimously returned ${status}.`,
+        || `Two independent compliance evidence sources unanimously returned ${status}.`,
       timestampSeconds: observations.find((entry) => Number.isFinite(Number(entry.timestampSeconds)))?.timestampSeconds ?? null,
       consensus: {
         verifierCount: observations.length,
         unanimous: true,
         statuses,
+        sources: observations.map((entry) => entry.evidenceSource),
       },
     };
   });

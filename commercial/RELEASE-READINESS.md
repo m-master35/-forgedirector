@@ -62,28 +62,39 @@ Representative live production benchmark:
 
 ## Unit economics — PASS FOR LAUNCH
 
-Measured live production workload:
+Measured live production planning:
 - Normal plan: 3,089 input + 826 output tokens; 2 model calls.
 - Weak-prompt plan: 4,131 input + 1,210 output tokens; 3 model calls.
-- Fresh 12s verified video:
-  - primary: 4,788 input + 1,419 output tokens;
-  - compliance verification: 12,128 input + 840 output tokens;
-  - total observed: 19,175 tokens.
 
-Conservative margin policy:
-- Price all observed inference at the more expensive EU Nova Pro rate when checking launch safety, even though production uses a cheaper mixed-model path.
-- Conservative fresh-video Bedrock ceiling: under about $0.028 per measured 12-second analysis.
-- Cached identical repeat: zero additional model tokens.
-- Rapid marketplace fee: 25% of API Hub payments as of 2026-09.
+Measured fresh verified-video duration profile on the current contiguous-window verifier:
 
-Current public-plan proposal remains positive on Bedrock inference even at full video-heavy utilization:
-- BASIC $0 / 20 requests.
-- PRO $19 / 200 requests.
-- ULTRA $49 / 1,000 requests.
-- MEGA $99 / 3,000 requests.
-- Hard limits; no launch overages.
+| Duration | Total observed tokens | Fresh latency | Conservative all-Nova-Pro ceiling |
+| ---: | ---: | ---: | ---: |
+| 12s | 19,320 | 19.2s | ~$0.0207 |
+| 30s | 38,110 | 23.7s | ~$0.0351 |
+| 60s | 69,012 | 30.1s | ~$0.0605 |
+| 90s | 104,200 | 56.5s | ~$0.0887 |
+| 120s | 138,493 | 66.8s | ~$0.1167 |
 
-See `commercial/pricing.md` and `Benchmark Unit Economics` for the detailed assumptions.
+All five duration cases returned HTTP 200 and full-duration coverage.
+
+Launch cost guardrail:
+- keep the mandatory Rapid `Requests` object;
+- add a custom **Video Analyses** object associated only with `POST /v1/analyze`;
+- BASIC: $0 / 20 Requests / 5 Video Analyses;
+- PRO: $25 / 250 Requests / 50 Video Analyses;
+- ULTRA: $75 / 1,000 Requests / 200 Video Analyses;
+- MEGA: $150 / 3,000 Requests / 500 Video Analyses;
+- both objects use Hard Limits;
+- no launch overages.
+
+Rapid marketplace fee: 25% of API Hub payments as of 2026-09.
+
+At the deliberately pessimistic 120-second all-Pro ceiling, fully exhausting the Video Analyses quota implies roughly $5.84 PRO / $23.35 ULTRA / $58.37 MEGA of Bedrock inference. That remains below post-Rapid subscription revenue of $18.75 / $56.25 / $112.50 respectively, before normal-request inference, Lambda/S3, PayPal and tax.
+
+Identical cached repeat analyses consume zero additional model tokens and returned in roughly 0.3–0.4 seconds in the latest repeatability gate.
+
+See `commercial/pricing.md`, `Benchmark Unit Economics`, and `Benchmark Duration Unit Economics` for detailed assumptions and evidence.
 
 ## Public API contract — PASS
 - Runtime / OpenAPI contract: v1.3.0.
@@ -109,8 +120,10 @@ Do not make the API public until every item below is checked in RapidAPI Studio/
 - [ ] API name is **ForgeDirector AI Video QA & Creative Intelligence**.
 - [ ] Short description and long listing copy match `commercial/listing.md`.
 - [ ] Logo / marketplace image is present.
-- [ ] BASIC / PRO / ULTRA / MEGA prices and monthly request quotas match `commercial/pricing.md`.
-- [ ] Every plan uses a **Hard Limit**, not a soft overage limit.
+- [ ] BASIC / PRO / ULTRA / MEGA prices and Requests quotas match `commercial/pricing.md`.
+- [ ] Custom **Video Analyses** object exists and is associated only with `POST /v1/analyze`.
+- [ ] Video Analyses monthly quotas are BASIC 5 / PRO 50 / ULTRA 200 / MEGA 500.
+- [ ] Both Requests and Video Analyses use **Hard Limits**, not soft overage limits.
 - [ ] No unintended overage fee is enabled.
 - [ ] Payout/PayPal setup is valid.
 - [ ] API remains PRIVATE while these checks are performed.

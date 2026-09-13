@@ -40,6 +40,7 @@ def analyze(path,duration):
       "assetId":asset,
       "platform":"General",
       "objective":"awareness",
+      "audience":f"cache-benchmark-{BENCH_NONCE}",
       "durationSeconds":duration,
       "context":f"Cache idempotence benchmark {BENCH_NONCE}. Audio removed. Judge visible facts only across the entire clip.",
       "requirements":{"mustShow":["motorcycle"],"mustNotShow":["wine bottle"]},

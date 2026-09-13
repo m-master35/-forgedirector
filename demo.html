@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0d12" />
+  <meta name="description" content="ForgeDirector is the automated QA gate after AI video generation: upload a short-form clip, analyze it, then accept, revise, or regenerate." />
+  <title>ForgeDirector — Automated QA for AI-Generated Video</title>
+  <link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+  <header class="nav shell">
+    <a class="brand" href="index.html" aria-label="ForgeDirector home">
+      <span class="brand-mark">F</span>
+      <span>ForgeDirector</span>
+    </a>
+    <nav aria-label="Demo navigation">
+      <a href="#example">Example</a>
+      <a href="https://github.com/m-master35/-forgedirector/blob/main/commercial/INTEGRATION-KIT.md">Integration kit</a>
+      <a class="nav-cta" href="https://rapidapi.com/mmaster35/api/forgedirector-video-creative-intelligence">Test the API</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="eyebrow">Post-generation creative intelligence</p>
+        <h1>The automated QA gate after AI video generation.</h1>
+        <p class="lede">ForgeDirector inspects the finished short-form clip, checks the production rules, and returns one machine-readable next action—with the evidence and prompts needed to execute it.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://rapidapi.com/mmaster35/api/forgedirector-video-creative-intelligence">Test ForgeDirector on RapidAPI <span aria-hidden="true">↗</span></a>
+          <a class="button secondary" href="https://github.com/m-master35/-forgedirector/blob/main/commercial/INTEGRATION-KIT.md">Open the 5-minute integration kit</a>
+        </div>
+        <p class="microcopy">Model-agnostic • Private upload flow • Built for short-form video up to 120 seconds</p>
+      </div>
+      <aside class="gate-card" aria-label="Example quality gate">
+        <div class="gate-topline">
+          <span>QUALITY GATE</span>
+          <span class="live-dot">ANALYSIS COMPLETE</span>
+        </div>
+        <div class="decision-row">
+          <span class="decision-icon" aria-hidden="true">↻</span>
+          <div>
+            <span class="decision-label">Decision</span>
+            <strong>REVISE</strong>
+          </div>
+          <span class="confidence">High confidence</span>
+        </div>
+        <div class="score-strip">
+          <div><span>Overall</span><b>72</b></div>
+          <div><span>Hook</span><b>58</b></div>
+          <div><span>CTA</span><b>46</b></div>
+        </div>
+        <p class="gate-reason">The product and continuity pass. The opening is slow and the required CTA text is not visible long enough to read.</p>
+        <p class="example-label">Representative, sanitized example—not a copied customer response.</p>
+      </aside>
+    </section>
+
+    <section class="flow-band" aria-label="ForgeDirector workflow">
+      <div class="shell flow">
+        <span>GENERATE</span><i>→</i><span>UPLOAD</span><i>→</i><span>ANALYZE</span><i>→</i><strong>ACCEPT / REVISE / REGENERATE</strong>
+      </div>
+    </section>
+
+    <section class="section shell" id="customers">
+      <div class="section-heading">
+        <p class="eyebrow">Who it is for</p>
+        <h2>One QA contract across every video generator.</h2>
+      </div>
+      <div class="customer-grid">
+        <article><span>01</span><h3>AI video platforms</h3><p>Add a deterministic release gate after any model finishes rendering.</p></article>
+        <article><span>02</span><h3>UGC &amp; ad generators</h3><p>Check hooks, CTAs, brand rules, text, and product visibility before delivery.</p></article>
+        <article><span>03</span><h3>Creative automation</h3><p>Review high-volume variants without turning every output into a manual task.</p></article>
+        <article><span>04</span><h3>Agentic media pipelines</h3><p>Give agents structured evidence and an explicit accept, revise, or regenerate branch.</p></article>
+      </div>
+    </section>
+
+    <section class="section example-section" id="example">
+      <div class="shell">
+        <div class="section-heading split-heading">
+          <div>
+            <p class="eyebrow">See the decision, not just a description</p>
+            <h2>A 24-second vertical productivity-app ad.</h2>
+          </div>
+          <p class="disclaimer">All names, asset IDs, observations, and scores below are illustrative and sanitized. They demonstrate the production response shape; they are not claimed as the output of a verified live analysis.</p>
+        </div>
+
+        <div class="example-grid">
+          <article class="request-card">
+            <div class="card-title"><span>INPUT</span><b>POST /v1/analyze</b></div>
+            <dl class="requirements">
+              <div><dt>Format</dt><dd>MP4 • 9:16 • 24s</dd></div>
+              <div><dt>Objective</dt><dd>Conversion</dd></div>
+              <div><dt>Audience</dt><dd>Busy young professionals</dd></div>
+            </dl>
+            <h3>Production requirements</h3>
+            <ul class="check-list">
+              <li>Show the product UI</li>
+              <li>Show the Northstar logo</li>
+              <li>Include “Start free” on screen</li>
+              <li>Keep the same lead throughout</li>
+              <li>Do not show competitor logos</li>
+              <li>Include a clear CTA</li>
+            </ul>
+            <pre><code>{
+  "assetId": "asset_demo_24s",
+  "platform": "TikTok",
+  "objective": "conversion",
+  "audience": "Busy young professionals",
+  "durationSeconds": 24,
+  "requirements": {
+    "mustShow": ["Northstar logo", "Product UI"],
+    "mustNotShow": ["Competitor logos"],
+    "mustIncludeText": ["Start free"],
+    "continuityRules": ["Same lead throughout"],
+    "ctaRequired": true
+  }
+}</code></pre>
+          </article>
+
+          <article class="response-card">
+            <div class="card-title"><span>OUTPUT</span><b>Structured production decision</b></div>
+            <div class="result-banner">
+              <div><span>QUALITY GATE</span><strong>REVISE</strong></div>
+              <p>High confidence • 1 explicit requirement failed</p>
+            </div>
+            <div class="score-grid" aria-label="Creative scores out of 100">
+              <div><span>Overall</span><b>72</b></div><div><span>Hook</span><b class="warn">58</b></div>
+              <div><span>Pacing</span><b>74</b></div><div><span>Clarity</span><b>82</b></div>
+              <div><span>Visual</span><b>86</b></div><div><span>Continuity</span><b>91</b></div>
+              <div><span>CTA</span><b class="fail">46</b></div><div><span>Platform fit</span><b>78</b></div>
+            </div>
+            <div class="diagnostic"><span>HOOK • MIXED</span><p>0–3s opens on a static desk before the lead’s interruption appears at 1.8s. The problem is recognizable, but the first meaningful change arrives late.</p></div>
+            <div class="diagnostic"><span>CTA • WEAK</span><p>“Start free” appears from 21.9–23.2s at small size. The spoken close says “Try it today,” weakening message match.</p></div>
+          </article>
+        </div>
+
+        <div class="detail-grid">
+          <article class="detail-card compliance-card">
+            <div class="card-title"><span>COMPLIANCE</span><b>5 pass • 1 fail</b></div>
+            <ul>
+              <li><i class="pass">✓</i><span><b>Product UI</b>Visible at 7.2–12.8s</span></li>
+              <li><i class="pass">✓</i><span><b>Northstar logo</b>Visible on product and end card</span></li>
+              <li><i class="fail-mark">×</i><span><b>“Start free” text</b>Present, but not held legibly</span></li>
+              <li><i class="pass">✓</i><span><b>Same lead</b>Identity and wardrobe remain consistent</span></li>
+              <li><i class="pass">✓</i><span><b>No competitor logos</b>None observed</span></li>
+              <li><i class="pass">✓</i><span><b>CTA present</b>Visual and spoken CTA observed</span></li>
+            </ul>
+          </article>
+          <article class="detail-card timeline-card">
+            <div class="card-title"><span>FULL-CLIP TIMELINE</span><b>24.0s reviewed</b></div>
+            <ol>
+              <li><time>0–3s</time><div><b>Hook</b><span>Static setup delays the pattern interrupt.</span></div></li>
+              <li><time>3–8s</time><div><b>Problem</b><span>Lead confronts an overloaded task list.</span></div></li>
+              <li><time>8–15s</time><div><b>Demo</b><span>Product UI resolves the task sequence clearly.</span></div></li>
+              <li><time>15–21s</time><div><b>Benefit</b><span>Clean before/after rhythm; continuity holds.</span></div></li>
+              <li><time>21–24s</time><div><b>CTA</b><span>Correct message, undersized and too brief.</span></div></li>
+            </ol>
+          </article>
+        </div>
+
+        <div class="fixes-grid">
+          <article class="detail-card">
+            <div class="card-title"><span>RANKED FIXES</span><b>Impact first</b></div>
+            <ol class="ranked-fixes">
+              <li><span>1</span><div><b>Move the interruption into frame one</b><p>Open on the task-overload moment; remove the 1.8-second desk hold.</p><small>High impact • Low effort</small></div></li>
+              <li><span>2</span><div><b>Rebuild the end card</b><p>Hold “Start free” for at least 2 seconds at mobile-readable size.</p><small>High impact • Low effort</small></div></li>
+              <li><span>3</span><div><b>Match the spoken and visual CTA</b><p>Replace “Try it today” with “Start free.”</p><small>Medium impact • Low effort</small></div></li>
+            </ol>
+          </article>
+          <article class="prompt-card">
+            <div class="card-title"><span>REGENERATION-READY PROMPT</span><b>Replace 0–3s</b></div>
+            <blockquote>Vertical 9:16 commercial opening. Begin immediately on the same late-20s lead at the same desk, same face, navy overshirt, lighting, lens language, and product styling. At frame one, notifications multiply across the laptop and phone while the lead reacts with controlled frustration. Use a fast 0.5-second push-in, crisp screen readability, realistic hand motion, and no logos other than Northstar. End on a clean match cut into the existing product-demo shot at 3.0 seconds.</blockquote>
+            <p>Scoped to the weak segment while explicitly preserving identity, wardrobe, setting, lighting, and the transition into the existing edit.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-section shell">
+      <p class="eyebrow">Ship fewer bad generations</p>
+      <h2>Put a decision between render complete and customer delivery.</h2>
+      <p>Start with the live API, then wire the returned quality gate into your accept, revise, or regenerate branch.</p>
+      <div class="hero-actions centered">
+        <a class="button primary" href="https://rapidapi.com/mmaster35/api/forgedirector-video-creative-intelligence">Test the live API <span aria-hidden="true">↗</span></a>
+        <a class="button secondary" href="https://github.com/m-master35/-forgedirector/blob/main/commercial/EXAMPLE-ANALYSIS.md">Read the complete example</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="shell">
+    <span>ForgeDirector • Automated QA for generated short-form video</span>
+    <span><a href="index.html">Hackathon demo</a> · <a href="https://github.com/m-master35/-forgedirector">GitHub</a></span>
+  </footer>
+</body>
+</html>

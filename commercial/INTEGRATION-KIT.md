@@ -107,7 +107,7 @@ Pseudocode:
 ```js
 const result = await analyzeVideo(assetId);
 
-switch (result.analysis.qualityGate.decision) {
+switch (result.analysis.qualityGate.action) {
   case "accept":
     ship(result);
     break;
@@ -126,6 +126,8 @@ switch (result.analysis.qualityGate.decision) {
 ```
 
 Treat the returned schema as the source of truth for the exact decision field/value names in your client.
+
+For a complete, sanitized walkthrough of the request, decision, scores, compliance evidence, timeline, ranked fixes, and regeneration prompt, see [EXAMPLE-ANALYSIS.md](EXAMPLE-ANALYSIS.md).
 
 ## RapidAPI authentication
 

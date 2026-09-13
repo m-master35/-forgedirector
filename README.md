@@ -10,6 +10,8 @@
 
 **ForgeDirector is live on RapidAPI:** https://rapidapi.com/mmaster35/api/forgedirector-video-creative-intelligence
 
+**See the commercial product in one page:** [open the public QA-gate demo](https://m-master35.github.io/-forgedirector/demo.html), then review the [representative analysis](commercial/EXAMPLE-ANALYSIS.md) or follow the [5-minute integration kit](commercial/INTEGRATION-KIT.md).
+
 The commercial product is designed to be a **post-generation QA gate for AI-generated short-form video**:
 
 ```text
@@ -18,7 +20,7 @@ GENERATE → UPLOAD → ANALYZE → ACCEPT / REVISE / REGENERATE
 
 A downstream app can send a finished clip to ForgeDirector and receive structured JSON with a production decision, creative scores, explicit requirement checks, hook/timeline/CTA diagnostics, ranked fixes, and regeneration-ready prompts.
 
-**Fastest integration path:** see [commercial/INTEGRATION-KIT.md](commercial/INTEGRATION-KIT.md) for the 5-minute upload → analyze flow, request examples, response fields, and implementation notes.
+**Fastest integration path:** see [commercial/INTEGRATION-KIT.md](commercial/INTEGRATION-KIT.md) for the 5-minute upload → analyze flow, request examples, response fields, and implementation notes. The [commercial funnel tracker](commercial/FUNNEL.md) keeps first-customer conversion evidence lightweight and auditable.
 
 ForgeDirector turns a short campaign brief into a structured video-production manifest, then maintains project state as the user revises individual scenes, audiences, formats, durations, and continuity constraints through conversation.
 

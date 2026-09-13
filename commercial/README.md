@@ -2,6 +2,14 @@
 
 This folder packages the ForgeDirector creative-director engine for distribution through RapidAPI.
 
+Commercial conversion assets:
+
+- [Public QA-gate demo](../demo.html)
+- [Representative short-form ad analysis](EXAMPLE-ANALYSIS.md)
+- [5-minute integration kit](INTEGRATION-KIT.md)
+- [Acquisition research and outreach ledger](ACQUISITION.md)
+- [Lightweight funnel tracker](FUNNEL.md)
+
 ## Product
 
 **ForgeDirector Video Creative Intelligence API**

@@ -1,0 +1,42 @@
+name: Diagnose Video Score Stability
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/diagnose-video-score-stability.yml
+      - tests/run-live-video-score-diagnostics.py
+permissions:
+  contents: read
+  id-token: write
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorScoreDiagnostics
+          mask-aws-account-id: true
+      - id: api
+        name: Resolve live API URL
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name forgedirector-commercial --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='CommercialApiBaseUrl'].OutputValue" --output text)
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Run score diagnostics
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: python tests/run-live-video-score-diagnostics.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forgedirector-video-score-diagnostics
+          path: /tmp/video-score-diagnostics.json

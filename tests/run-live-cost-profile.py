@@ -8,9 +8,12 @@ ROOT=Path(tempfile.mkdtemp(prefix="fd-cost-"))
 NONCE=f"{os.environ.get('GITHUB_RUN_ID','local')}-{os.environ.get('GITHUB_RUN_ATTEMPT','1')}-{time.time_ns()}"
 URL="https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/short-video/sample-output/assets/short-video.mp4"
 
+# Current published AWS rates used for launch-economics estimates.
+# Nova 2 Lite: $0.30/M input, $2.50/M output.
+# Nova Pro cross-region: $0.92/M input, $3.68/M output.
 RATES={
   "nova2-lite":(0.30,2.50),
-  "nova-pro":(0.80,3.20),
+  "nova-pro":(0.92,3.68),
 }
 PRO_RATE=RATES["nova-pro"]
 LITE_RATE=RATES["nova2-lite"]

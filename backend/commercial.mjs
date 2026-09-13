@@ -1469,13 +1469,40 @@ async function invokeVideoAnalysis({ asset, payload }) {
       throw error;
     }
 
+    const primaryEvidenceUsable = (
+      analysis?.compliance
+      && Array.isArray(analysis.compliance.checks)
+      && (
+        !declaredDurationSeconds
+        || analysis?.coverage?.fullDurationReviewed === true
+      )
+    );
+
+    const consensusSources = [
+      ...(primaryEvidenceUsable
+        ? [{
+            ...analysis.compliance,
+            evidenceSource: 'primary_full_duration_analysis',
+          }]
+        : []),
+      ...verificationRecords.map((record) => ({
+        ...record.compliance,
+        evidenceSource: `blind_${record.modelId}`,
+      })),
+    ];
+
     const consensus = consensusVideoCompliance(
-      verificationRecords.map((record) => record.compliance),
+      consensusSources,
       requirements,
     );
 
-    complianceVerificationConsensusUsed = verificationRecords.length > 1;
-    complianceVerificationAgreement = consensus.agreement;
+    complianceVerificationConsensusUsed = consensusSources.length > 1;
+    complianceVerificationAgreement = {
+      ...consensus.agreement,
+      primaryEvidenceUsed: primaryEvidenceUsable,
+      blindVerifierCount: verificationRecords.length,
+      evidenceSourceCount: consensusSources.length,
+    };
     complianceVerificationModelIds = verificationRecords.map((record) => record.modelId);
     complianceVerificationModelId = complianceVerificationModelIds[0] || null;
     complianceVerificationUsage = verifierUsageTotals.totalTokens > 0

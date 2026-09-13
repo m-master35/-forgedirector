@@ -499,6 +499,63 @@ assert.equal(consensusDisagreement.compliance.status, 'needs_review');
 assert.equal(consensusDisagreement.compliance.checks[0].status, 'uncertain');
 assert.equal(consensusDisagreement.agreement.disputedChecks, 1);
 
+const primaryPlusBlindConsensus = consensusVideoCompliance([
+  {
+    evidenceSource: 'primary_full_duration_analysis',
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'pass', evidence: 'Primary full-duration evidence shows the mug.', timestampSeconds: 2 },
+    ],
+  },
+  {
+    evidenceSource: 'blind_eu.amazon.nova-pro-v1:0',
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'pass', evidence: 'Blind verifier independently observes the mug.', timestampSeconds: 3 },
+    ],
+  },
+], {
+  mustShow: ['coffee mug'],
+});
+assert.equal(primaryPlusBlindConsensus.compliance.status, 'pass');
+assert.deepEqual(
+  primaryPlusBlindConsensus.compliance.checks[0].consensus.sources,
+  ['primary_full_duration_analysis', 'blind_eu.amazon.nova-pro-v1:0'],
+);
+
+const primaryBlindDisagreement = consensusVideoCompliance([
+  {
+    evidenceSource: 'primary_full_duration_analysis',
+    status: 'pass',
+    passed: true,
+    failedCount: 0,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'pass', evidence: 'Primary evidence shows mug.', timestampSeconds: 2 },
+    ],
+  },
+  {
+    evidenceSource: 'blind_eu.amazon.nova-pro-v1:0',
+    status: 'fail',
+    passed: false,
+    failedCount: 1,
+    uncertainCount: 0,
+    checks: [
+      { type: 'mustShow', rule: 'coffee mug', status: 'fail', evidence: 'Blind verifier does not see mug.', timestampSeconds: null },
+    ],
+  },
+], {
+  mustShow: ['coffee mug'],
+});
+assert.equal(primaryBlindDisagreement.compliance.status, 'needs_review');
+assert.equal(primaryBlindDisagreement.compliance.checks[0].status, 'uncertain');
+
 const singleVerifierConsensus = consensusVideoCompliance([
   {
     status: 'pass',

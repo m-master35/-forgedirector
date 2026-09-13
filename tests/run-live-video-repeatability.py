@@ -97,7 +97,7 @@ def find_check(analysis,typ,rule):
 
 rows=[]
 failures=[]
-observations={item["name"]:{"overall":[],"hook":[],"gate":[]} for item in SOURCES}
+observations={item["name"]:{"overall":[],"hook":[],"gate":[],"baselineAnalysis":None} for item in SOURCES}
 for item in SOURCES:
     path=download_normalize(item)
     for run in range(1,RUNS_PER_CASE+1):
@@ -106,13 +106,18 @@ for item in SOURCES:
             rows.append((item["name"],run,us,"upload-fail","-","-",None)); failures.append(f"{item['name']} run {run}: upload failed HTTP {us}"); continue
         probe=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(path)],capture_output=True,text=True,check=True)
         duration=float(probe.stdout.strip())
-        payload={"assetId":asset,"platform":"General","objective":"awareness","durationSeconds":duration,"context":f"Repeatability benchmark {BENCH_NONCE} for {item['name']}. Audio removed. Judge visible facts only across the entire clip.","requirements":item["requirements"]}
+        payload={"assetId":asset,"platform":"General","objective":"awareness","audience":f"repeatability-{BENCH_NONCE}-{item['name']}","durationSeconds":duration,"context":f"Repeatability benchmark {BENCH_NONCE} for {item['name']}. Audio removed. Judge visible facts only across the entire clip.","requirements":item["requirements"]}
         start=time.time(); status,result=http_json("/v1/analyze",payload,timeout=180); elapsed=round(time.time()-start,2)
         if status!=200:
             rows.append((item["name"],run,status,"analyze-fail","-",elapsed,None)); failures.append(f"{item['name']} run {run}: HTTP {status} {result.get('error','')}"); continue
         analysis=result.get("analysis") or {}
         meta=result.get("meta") or {}
         cache_hit=meta.get("analysisCacheHit")
+        canonical_analysis=json.dumps(analysis,sort_keys=True,separators=(",",":"))
+        if run == 1:
+            observations[item["name"]]["baselineAnalysis"]=canonical_analysis
+        elif canonical_analysis != observations[item["name"]]["baselineAnalysis"]:
+            failures.append(f"{item['name']} run {run}: cached analysis differs from fresh baseline")
         if run == 1 and cache_hit is not False:
             failures.append(f"{item['name']} run {run}: expected fresh analysis cache miss, got {cache_hit}")
         if run > 1 and cache_hit is not True:

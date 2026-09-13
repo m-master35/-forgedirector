@@ -15,16 +15,17 @@ This file is the authoritative pre-publication checklist for ForgeDirector AI Vi
 - Model escalation is bounded and can recover through a validated deterministic production blueprint.
 
 ### Video compliance accuracy — PASS
-Latest unchanged labeled benchmark:
+Latest labeled benchmark on the current contiguous-window verifier runtime:
 - 52/52 compliance checks correct.
 - 29/29 full-duration coverage.
 - 28/28 no-speech hallucination checks.
 - 0 technical failures.
+- Coverage contract requires >=95% contiguous timeline coverage, opening evidence, final-5% evidence, and duration-scaled minimum segmentation.
 - Media prompt-injection and context/transcript-injection controls rejected correctly.
 - Primary full-duration evidence + independent blind verification consensus is required for authoritative requirement decisions; disagreement becomes `needs_review`.
 
 ### Real-video repeatability / idempotence — PASS
-Latest repeated genuine/generated-video benchmark:
+Latest repeated genuine/generated-video benchmark on the same current runtime:
 - 6 clips × 5 analyses = 30/30 successful.
 - First call per unique normalized analysis request is fresh.
 - Repeated identical requests return the exact cached analysis.

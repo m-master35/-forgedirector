@@ -11,6 +11,8 @@ Launch endpoints:
 - `POST /v1/plan` — creative brief → structured production manifest
 - `POST /v1/revise` — existing manifest + instruction → revision-aware updated manifest
 - `POST /v1/qa` — deterministic production QA without an AI-model call
+- `POST /v1/uploads` — create a short-lived private video upload ticket
+- `POST /v1/analyze` — analyze uploaded video and return creative/compliance intelligence
 - `GET /health` — health and endpoint discovery
 
 The commercial Lambda handler is `backend/commercial.mjs`. It reuses the ForgeDirector Bedrock prompt layer while keeping marketplace routing, security, and QA isolated from the hackathon-facing handler.
@@ -27,7 +29,9 @@ AWS Lambda Function URL
 commercial.mjs
   ├── /v1/plan ─────┐
   ├── /v1/revise ───┼── Amazon Bedrock
-  ├── /v1/qa ───────┴── deterministic QA
+  ├── /v1/analyze ──┘
+  ├── /v1/uploads ───── private S3 upload ticket
+  ├── /v1/qa ───────── deterministic QA
   └── /health
 ```
 
@@ -40,7 +44,7 @@ Infrastructure is defined in `../commercial-template.yaml` using AWS SAM.
 3. Choose the model/inference profile and record its model ID or ARN.
 4. Deploy `commercial-template.yaml`.
 5. Record the `CommercialApiBaseUrl` stack output.
-6. Test `/health`, `/v1/plan`, `/v1/revise`, and `/v1/qa` directly before locking the endpoint to RapidAPI.
+6. Test all six endpoints directly before locking the endpoint to RapidAPI, including the private upload → analyze video flow.
 
 ## RapidAPI setup
 
@@ -49,18 +53,20 @@ Infrastructure is defined in `../commercial-template.yaml` using AWS SAM.
 3. Set the AWS `CommercialApiBaseUrl` as the base URL.
 4. Configure BASIC / PRO / ULTRA / MEGA using `pricing.md`.
 5. Use `listing.md` for the marketplace copy and examples.
-6. Copy the API-specific `X-RapidAPI-Proxy-Secret` from RapidAPI's security configuration.
-7. Redeploy the AWS stack with `RapidApiProxySecret` set to that value.
-8. Confirm direct calls without the secret receive `401` while RapidAPI test-console calls succeed.
-9. Publish only after all three product endpoints return valid example responses.
+6. Configure both the normal Requests quota and the custom **Video Analyses** quota from `pricing.md`; associate Video Analyses only with `POST /v1/analyze`.
+7. Copy the API-specific `X-RapidAPI-Proxy-Secret` from RapidAPI's security configuration.
+8. Redeploy the AWS stack with `RapidApiProxySecret` set to that value.
+9. Confirm direct calls without the secret receive `401` while RapidAPI test-console calls succeed.
+10. Publish only after all six endpoints return valid example responses and the manual release checklist is complete.
 
 ## Cost controls
 
-- Start with hard RapidAPI quotas and no paid overages.
+- Use hard limits for both RapidAPI Requests and Video Analyses; no launch overages.
+- Associate Video Analyses only with `POST /v1/analyze`.
 - `/v1/qa` is deterministic and incurs no Bedrock inference call.
 - Plan and revise calls are capped to a 6,000-character instruction and 120 KB request body.
 - Bedrock output is capped to 3,200 tokens.
-- The Lambda is ARM64 with 512 MB memory and a 40-second timeout.
+- The commercial Lambda is ARM64 with 1024 MB memory and a 120-second timeout.
 - Add AWS Budgets / billing alerts before opening paid plans to the public.
 
 ## Launch success metrics

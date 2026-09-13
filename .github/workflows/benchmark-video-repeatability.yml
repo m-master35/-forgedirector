@@ -1,5 +1,6 @@
 name: Benchmark Video QA Repeatability
 
+# Stochastic release gate for repeated genuine generated-video analysis.
 on:
   workflow_dispatch:
   push:

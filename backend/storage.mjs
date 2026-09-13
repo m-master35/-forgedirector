@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -13,6 +14,8 @@ const s3 = new S3Client({
 
 const VIDEO_BUCKET = process.env.VIDEO_BUCKET || '';
 const VIDEO_PREFIX = String(process.env.VIDEO_PREFIX || 'video-assets').replace(/^\/+|\/+$/g, '');
+const ANALYSIS_CACHE_PREFIX = String(process.env.ANALYSIS_CACHE_PREFIX || 'analysis-cache').replace(/^\/+|\/+$/g, '');
+const ANALYSIS_CACHE_TTL_SECONDS = Number(process.env.ANALYSIS_CACHE_TTL_SECONDS || 86400);
 const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_BYTES || 31457280);
 const UPLOAD_URL_TTL_SECONDS = Number(process.env.UPLOAD_URL_TTL_SECONDS || 900);
 
@@ -101,6 +104,8 @@ export async function resolveVideoAsset(assetId) {
     throw error;
   }
 
+  const etag = String(head?.ETag || '').replace(/^"+|"+$/g, '').trim();
+
   return {
     assetId,
     bucket,
@@ -109,6 +114,7 @@ export async function resolveVideoAsset(assetId) {
     sizeBytes,
     contentType,
     format,
+    contentFingerprint: etag || null,
   };
 }
 
@@ -122,5 +128,80 @@ export async function deleteVideoAsset(assetId) {
       assetId,
       message: error?.message,
     });
+  }
+}
+
+
+function analysisCacheKey(cacheKey) {
+  const value = String(cacheKey || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(value)) {
+    const error = new Error('analysis cache key must be a SHA-256 hex digest.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return `${ANALYSIS_CACHE_PREFIX}/${value}.json`;
+}
+
+export async function readAnalysisCache(cacheKey) {
+  const bucket = requireBucket();
+  const key = analysisCacheKey(cacheKey);
+
+  try {
+    const result = await s3.send(new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }));
+
+    const lastModifiedMs = result?.LastModified instanceof Date
+      ? result.LastModified.getTime()
+      : 0;
+    const ageSeconds = lastModifiedMs
+      ? Math.max(0, Math.floor((Date.now() - lastModifiedMs) / 1000))
+      : ANALYSIS_CACHE_TTL_SECONDS + 1;
+
+    if (ageSeconds > ANALYSIS_CACHE_TTL_SECONDS) return null;
+
+    const body = await result?.Body?.transformToString?.();
+    if (!body) return null;
+
+    const parsed = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+
+    return {
+      value: parsed,
+      ageSeconds,
+    };
+  } catch (error) {
+    const status = Number(error?.$metadata?.httpStatusCode || 0);
+    const name = String(error?.name || '');
+    if (status === 404 || name === 'NoSuchKey' || name === 'NotFound') return null;
+    console.warn('ForgeDirector analysis cache read failed', {
+      message: error?.message,
+    });
+    return null;
+  }
+}
+
+export async function writeAnalysisCache(cacheKey, value) {
+  const bucket = requireBucket();
+  const key = analysisCacheKey(cacheKey);
+
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: JSON.stringify(value),
+      ContentType: 'application/json',
+      CacheControl: 'private, max-age=0, no-store',
+      Metadata: {
+        purpose: 'forgedirector-analysis-cache',
+      },
+    }));
+    return true;
+  } catch (error) {
+    console.warn('ForgeDirector analysis cache write failed', {
+      message: error?.message,
+    });
+    return false;
   }
 }

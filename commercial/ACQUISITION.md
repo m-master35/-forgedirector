@@ -27,16 +27,16 @@ Primary value:
 | EzUGC | AI UGC API + MCP | hello@ezugc.ai | SENT | Strong direct post-render QA fit. |
 | Prizmad | AI UGC/ad generation + API/MCP | hello@prizmad.com | SENT | Post-render drift/compliance QA. |
 | agent-media | REST + SDKs + CLI + MCP + webhooks | support@agent-media.ai | SENT | Developer-first; strong automation fit. |
-| UGC Copilot | Multi-engine REST API + webhooks + SDKs | support@ugccopilot.ai | DRAFTED | Has existing product-ad QC; pitch external generalized QA. |
-| StoryShort | Short-form generation/publishing API | hello@storyshort.ai | DRAFTED | QA before automatic publishing. |
-| Reeloop | REST + SDKs + MCP + webhooks | support@reeloop.ai | DRAFTED | QA before publish/delivery. |
-| AdGPT | Programmatic AI ad generation | support@adgpt.com | DRAFTED | High-volume ad QA use case. |
-| MakeUGC | Platform API + MCP + webhook generation | help@makeugc.ai | DRAFTED | Partner/API integration fit. |
-| Reviral | AI image/video API + UGC workflows | support@reviral.ai | DRAFTED | Model-agnostic QA after render. |
-| Wireflow | Multi-model video workflows + webhooks | andrew@wireflow.ai | DRAFTED | Strong workflow-level QA integration. |
-| VideoGenAPI | Unified multi-model video API | support@videogenapi.com | DRAFTED | QA as optional layer across 17 models. |
-| AI Video API | Unified multi-model video generation API | support@aivideoapi.ai | DRAFTED | Consistent QA contract across generators. |
-| VisionStory | REST + SDK + CLI + MCP + agent workflows | collabs@visionstory.ai | DRAFTED | QA for avatar/AI-video agent workflows. |
+| UGC Copilot | Multi-engine REST API + webhooks + SDKs | support@ugccopilot.ai | SENT | Has existing product-ad QC; pitch external generalized QA. |
+| StoryShort | Short-form generation/publishing API | hello@storyshort.ai | SENT | QA before automatic publishing. |
+| Reeloop | REST + SDKs + MCP + webhooks | support@reeloop.ai | SENT | QA before publish/delivery. |
+| AdGPT | Programmatic AI ad generation | support@adgpt.com | SENT | High-volume ad QA use case. |
+| MakeUGC | Platform API + MCP + webhook generation | help@makeugc.ai | SENT | Partner/API integration fit. |
+| Reviral | AI image/video API + UGC workflows | support@reviral.ai | SENT | Model-agnostic QA after render. |
+| Wireflow | Multi-model video workflows + webhooks | andrew@wireflow.ai | SENT | Strong workflow-level QA integration. |
+| VideoGenAPI | Unified multi-model video API | support@videogenapi.com | SENT | QA as optional layer across 17 models. |
+| AI Video API | Unified multi-model video generation API | support@aivideoapi.ai | SENT | Consistent QA contract across generators. |
+| VisionStory | REST + SDK + CLI + MCP + agent workflows | collabs@visionstory.ai | SENT | QA for avatar/AI-video agent workflows. |
 
 ## Current outreach rule
 

@@ -36,6 +36,15 @@ The 120-second measurement is the launch quota-sizing case. This is intentionall
 
 The real mixed-model video cost is lower than the all-Pro ceiling. Lambda, S3, data transfer, PayPal and tax are not included in these figures, so the ceiling is not a complete accounting cost.
 
+Measured duration profile on the current verifier runtime:
+
+- 12s with requirements: **~$0.019–$0.023** conservative upper model cost;
+- 30s with requirements: **~$0.034–$0.041**;
+- 60s with requirements: **~$0.057–$0.070**;
+- 120s with requirements: **~$0.135–$0.136**.
+
+The paid launch quotas were therefore tightened from the earlier experimental 200/1,000/3,000 request levels to **100/300/600** for PRO/ULTRA/MEGA. This protects margin even if a subscriber disproportionately consumes fresh maximum-duration analyses.
+
 Rapid's current marketplace fee is 25% of API Hub payments. At the launch plans below, even the deliberately pessimistic all-Pro video cost leaves positive inference contribution if every possible full-analysis credit is consumed:
 
 | Tier | Price | Provider revenue after 25% Rapid fee* | Max full analyses | 120s worst-case model spend | Remaining before Lambda/S3/PayPal/tax |

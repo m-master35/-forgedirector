@@ -29,6 +29,9 @@ Upload a short-form video, call `/v1/analyze`, and receive standardized JSON con
 - production-ready prompts for segments that should be regenerated
 - deterministic `accept`, `revise`, or `regenerate` quality gate for automation
 - explicit creative-spec compliance checks (`mustShow`, `mustNotShow`, required text, continuity rules, CTA requirement)
+- full-duration evidence coverage for requirement-bearing videos rather than relying on isolated frames
+- independent compliance verification; evidence-source disagreement is surfaced conservatively as `needs_review`
+- idempotent cached repeats for identical video + normalized analysis requests, returning the same analysis without another model inference
 - objective-specific scoring weights for engagement, conversion, awareness, education, app installs, and lead generation
 - TikTok, Reels, and Shorts repurposing guidance
 
@@ -69,6 +72,8 @@ A raw multimodal-model call gives you an opinion. ForgeDirector gives your appli
 - regeneration prompts
 - platform-specific repurposing guidance
 - structured schemas suitable for automation
+- full-duration, evidence-backed production-rule checks
+- stable cached repeat results for identical requests
 - planning, revision, and deterministic QA in the same API
 
 ## Endpoint one-liners

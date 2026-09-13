@@ -94,17 +94,17 @@ Priority guide:
 | A | Creatify | Official API generates product/ad videos and accepts a per-job `webhook_url`: [product-to-video endpoint](https://docs.creatify.ai/api-reference/product_to_video/post-apiproduct_to_videos-gen_video) | Insert QA when the generated ad URL becomes available; return targeted fixes or a replacement prompt before customer delivery. | SENT |
 | A | JoggAI | Official docs expose avatar/product video creation and completion events: [webhook guide](https://docs.jogg.ai/api-reference/v2/API%20Documentation/WebhookIntegration) | Trigger ForgeDirector on `generated_*_video_success`, especially for batch UGC/ad creation. | SENT |
 | A | Tavus | `POST /v2/videos` generates replica video and accepts a `callback_url`: [Generate Video](https://docs.tavus.io/api-reference/video-request/create-video) | QA personalized/replica renders for CTA, continuity, required text, and delivery readiness. | SENT |
-| A | D-ID | `POST /talks` creates a talking-avatar video and supports a webhook: [Create a talk](https://docs.d-id.com/reference/createtalk) | Post-render visual/CTA/brand compliance for avatar clips before they enter campaign or support workflows. | RESEARCHED — NOT CONTACTED |
-| A | Synthesia | Official REST API creates videos, supports templates, and documents completion webhooks: [API introduction](https://docs.synthesia.io/reference/introduction) | Quality gate for personalized videos at scale, with explicit checks against template/campaign requirements. | RESEARCHED — NOT CONTACTED |
-| A | Colossyan | Programmable video creation, templates, custom avatars, and callback notifications are documented: [API overview](https://docs.colossyan.com/) | Validate generated training, sales, and marketing videos before automated distribution. | RESEARCHED — NOT CONTACTED |
-| A | Elai | Story API builds video from text/HTML/URL; render completion or failure arrives by webhook: [prompt-to-video walkthrough](https://elai.readme.io/reference/prompt-to-video-walkthrough) | Check automatically assembled stories for full-clip pacing, continuity, CTA, and required elements. | RESEARCHED — NOT CONTACTED |
-| A | Hour One | Official API docs describe REST-based blueprint and dynamic video generation: [Hour One API](https://hourone.gitbook.io/api-docs) | Add release QA to automated personalized/avatar-video production, especially template-variable campaigns. | RESEARCHED — NOT CONTACTED |
-| A | Akool | Talking Avatar API creates video and supports `webhookUrl` or status polling: [Talking Avatar](https://docs.akool.com/ai-tools-suite/talking-avatar) | Check avatar, brand, text, and CTA requirements when the asynchronous render completes. | RESEARCHED — NOT CONTACTED |
+| A | D-ID | `POST /talks` creates a talking-avatar video and supports a webhook: [Create a talk](https://docs.d-id.com/reference/createtalk) | Post-render visual/CTA/brand compliance for avatar clips before they enter campaign or support workflows. | SENT |
+| A | Synthesia | Official REST API creates videos, supports templates, and documents completion webhooks: [API introduction](https://docs.synthesia.io/reference/introduction) | Quality gate for personalized videos at scale, with explicit checks against template/campaign requirements. | SENT |
+| A | Colossyan | Programmable video creation, templates, custom avatars, and callback notifications are documented: [API overview](https://docs.colossyan.com/) | Validate generated training, sales, and marketing videos before automated distribution. | SENT |
+| A | Elai | Story API builds video from text/HTML/URL; render completion or failure arrives by webhook: [prompt-to-video walkthrough](https://elai.readme.io/reference/prompt-to-video-walkthrough) | Check automatically assembled stories for full-clip pacing, continuity, CTA, and required elements. | SENT |
+| A | Hour One | Official API docs describe REST-based blueprint and dynamic video generation: [Hour One API](https://hourone.gitbook.io/api-docs) | Add release QA to automated personalized/avatar-video production, especially template-variable campaigns. | SENT |
+| A | Akool | Talking Avatar API creates video and supports `webhookUrl` or status polling: [Talking Avatar](https://docs.akool.com/ai-tools-suite/talking-avatar) | Check avatar, brand, text, and CTA requirements when the asynchronous render completes. | SENT |
 | A | Creatomate | REST API renders video and recommends completion webhooks: [API reference](https://creatomate.com/docs/api/reference/introduction) | Natural callback-to-QA handoff for automated, templated social/ad variants. | SENT |
 | A | JSON2Video | REST API submits movies and supports webhook destinations after rendering: [API endpoints](https://json2video.com/docs/v2/reference/api-endpoints), [webhooks](https://json2video.com/docs/v2/reference/webhooks) | Analyze the final movie URL before its export/distribution pipeline continues. | SENT |
-| A | Shotstack | JSON/REST video render API with completion callbacks and output URLs: [API reference](https://shotstack.io/docs/api/), [webhooks](https://shotstack.io/docs/guide/architecting-an-application/webhooks/) | Add an optional creative QA stage between render completion and Serve/destination delivery. | RESEARCHED — NOT CONTACTED |
+| A | Shotstack | JSON/REST video render API with completion callbacks and output URLs: [API reference](https://shotstack.io/docs/api/), [webhooks](https://shotstack.io/docs/guide/architecting-an-application/webhooks/) | Add an optional creative QA stage between render completion and Serve/destination delivery. | SENT |
 | A | Plainly | REST API triggers asynchronous template renders and supports final-state webhooks: [developer guide](https://help.plainlyvideos.com/docs/developer-guide), [renders API](https://help.plainlyvideos.com/docs/developer-guide/renders-api) | QA high-volume personalized/template outputs before webhook-driven delivery. | SENT |
-| A | Bannerbear | Video-generation API plus per-asset and project-level `video_created` webhooks: [API reference](https://developers.bannerbear.com/v2/) | Run QA after programmatic social/video assets render and before campaign publication. | RESEARCHED — NOT CONTACTED |
+| A | Bannerbear | Video-generation API plus per-asset and project-level `video_created` webhooks: [API reference](https://developers.bannerbear.com/v2/) | Run QA after programmatic social/video assets render and before campaign publication. | SENT |
 | B | Runway | Official API supports text/image/video-to-video, product-ad and product-UGC recipes, task management, and workflows: [API reference](https://docs.dev.runwayml.com/api/) | Offer generator-independent QA after Runway tasks/workflows finish; especially relevant to product-ad recipes. | RESEARCHED — NOT CONTACTED |
 | B | Luma AI | Dream Machine API generates text/image-to-video and accepts a status callback URL: [video generation guide](https://docs.lumalabs.ai/docs/video-generation) | Evaluate generated clips at callback time and feed scoped prompts into a regenerate/extend loop. | RESEARCHED — NOT CONTACTED |
 | B | fal | Multi-model video API with queue webhooks specifically documented for long-running video generation: [Video Generation API](https://fal.ai/docs/model-api-reference/video-generation-api/overview), [webhooks](https://fal.ai/docs/documentation/model-apis/inference/webhooks) | A single QA contract across many underlying generators is a strong platform-level differentiator. | RESEARCHED — NOT CONTACTED |
@@ -120,3 +120,18 @@ Before any outreach:
 2. Tailor the pitch to the documented callback/render lifecycle; do not imply an existing partnership.
 3. Link the public commercial demo and the 5-minute integration kit.
 4. Do not offer discounts, exclusivity, custom roadmap commitments, or enterprise terms without owner approval.
+
+
+### Outreach batch 4 — SENT 2026-09-13
+
+Sent tailored outreach with the live demo and RapidAPI listing to:
+- D-ID — support@d-id.com
+- Synthesia — support@synthesia.io
+- Colossyan — support@colossyan.com
+- Elai — support@elai.io
+- Hour One — support@hourone.ai
+- Akool — info@akool.com
+- Shotstack — sales@shotstack.io
+- Bannerbear — support@bannerbear.com
+
+This batch was selected from the researched list because each has a programmable or asynchronous video-generation path where a post-render QA gate can be explained clearly.

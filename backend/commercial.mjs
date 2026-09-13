@@ -19,6 +19,7 @@ import {
   consensusVideoCompliance,
   applyVerifiedVideoCompliance,
   assessVideoAnalysisCoverage,
+  isAuthoritativeVerifierCoverage,
   assertAssetId,
 } from './video-intelligence.mjs';
 import {

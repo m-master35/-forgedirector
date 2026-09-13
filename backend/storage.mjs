@@ -159,7 +159,19 @@ export async function readAnalysisCache(cacheKey) {
       ? Math.max(0, Math.floor((Date.now() - lastModifiedMs) / 1000))
       : ANALYSIS_CACHE_TTL_SECONDS + 1;
 
-    if (ageSeconds > ANALYSIS_CACHE_TTL_SECONDS) return null;
+    if (ageSeconds > ANALYSIS_CACHE_TTL_SECONDS) {
+      try {
+        await s3.send(new DeleteObjectCommand({
+          Bucket: bucket,
+          Key: key,
+        }));
+      } catch (cleanupError) {
+        console.warn('ForgeDirector stale analysis cache cleanup failed', {
+          message: cleanupError?.message,
+        });
+      }
+      return null;
+    }
 
     const body = await result?.Body?.transformToString?.();
     if (!body) return null;

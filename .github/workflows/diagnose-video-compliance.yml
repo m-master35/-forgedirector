@@ -1,5 +1,6 @@
 name: Diagnose Video Compliance Verifier
 
+# Keep this workflow available as a targeted production probe after verifier changes.
 on:
   workflow_dispatch:
   push:

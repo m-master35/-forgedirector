@@ -54,6 +54,8 @@ Resources:
           UPLOAD_URL_TTL_SECONDS: '900'
           VIDEO_BUCKET: !Ref VideoAssetBucketName
           VIDEO_PREFIX: video-assets
+          ANALYSIS_CACHE_PREFIX: analysis-cache
+          ANALYSIS_CACHE_TTL_SECONDS: '86400'
       Policies:
         - Statement:
             - Effect: Allow
@@ -66,7 +68,9 @@ Resources:
                 - s3:GetObject
                 - s3:PutObject
                 - s3:DeleteObject
-              Resource: !Sub 'arn:${AWS::Partition}:s3:::${VideoAssetBucketName}/video-assets/*'
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:s3:::${VideoAssetBucketName}/video-assets/*'
+                - !Sub 'arn:${AWS::Partition}:s3:::${VideoAssetBucketName}/analysis-cache/*'
       FunctionUrlConfig:
         AuthType: NONE
         Cors:

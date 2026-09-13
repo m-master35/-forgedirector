@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 import {
   SYSTEM_PROMPT,
@@ -8,7 +9,13 @@ import {
   buildBriefEnricherPrompt,
 } from './director-prompt.mjs';
 import { evaluateCampaign } from './qa.mjs';
-import { createVideoUpload, deleteVideoAsset, resolveVideoAsset } from './storage.mjs';
+import {
+  createVideoUpload,
+  deleteVideoAsset,
+  resolveVideoAsset,
+  readAnalysisCache,
+  writeAnalysisCache,
+} from './storage.mjs';
 import {
   VIDEO_ANALYSIS_SYSTEM_PROMPT,
   VIDEO_COMPLIANCE_SYSTEM_PROMPT,
@@ -47,6 +54,47 @@ const VIDEO_FALLBACK_MODEL_ID = process.env.VIDEO_FALLBACK_MODEL_ID || '';
 const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET || '';
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 120000);
 const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_BYTES || 31457280);
+const VIDEO_ANALYSIS_CACHE_VERSION = 'fd-video-analysis-1.5|fd-shortform-v5|compliance-primary-blind-v1';
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function videoAnalysisCacheKey({
+  asset,
+  platform,
+  objective,
+  audience,
+  context,
+  transcript,
+  declaredDurationSeconds,
+  requirements,
+}) {
+  const fingerprint = String(asset?.contentFingerprint || '').trim();
+  if (!fingerprint) return null;
+
+  const material = stableJson({
+    version: VIDEO_ANALYSIS_CACHE_VERSION,
+    contentFingerprint: fingerprint,
+    sizeBytes: Number(asset?.sizeBytes || 0),
+    contentType: String(asset?.contentType || ''),
+    platform,
+    objective,
+    audience,
+    context,
+    transcript,
+    declaredDurationSeconds,
+    requirements,
+    primaryModelId: MODEL_ID || null,
+    fallbackModelId: VIDEO_FALLBACK_MODEL_ID || null,
+  });
+
+  return createHash('sha256').update(material).digest('hex');
+}
 
 function header(event, name) {
   const target = name.toLowerCase();
@@ -1038,6 +1086,42 @@ async function invokeVideoAnalysis({ asset, payload }) {
     requirements,
   });
 
+  const analysisCacheKey = videoAnalysisCacheKey({
+    asset,
+    platform,
+    objective,
+    audience,
+    context,
+    transcript,
+    declaredDurationSeconds,
+    requirements,
+  });
+
+  if (analysisCacheKey) {
+    const cached = await readAnalysisCache(analysisCacheKey);
+    if (cached?.value?.analysis) {
+      const cachedValue = cached.value;
+      return {
+        ...cachedValue,
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+        },
+        complianceVerificationUsage: cachedValue.complianceVerificationUsage
+          ? {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+            }
+          : null,
+        analysisCacheHit: true,
+        analysisCacheAgeSeconds: cached.ageSeconds,
+        analysisCacheVersion: VIDEO_ANALYSIS_CACHE_VERSION,
+      };
+    }
+  }
+
   const invokeAnalysisOnce = async (modelId, promptText) => client.send(new ConverseCommand({
     modelId,
     system: [{ text: VIDEO_ANALYSIS_SYSTEM_PROMPT }],
@@ -1520,7 +1604,7 @@ async function invokeVideoAnalysis({ asset, payload }) {
     analysis = applyVerifiedVideoCompliance(analysis, consensus.compliance);
   }
 
-  return {
+  const analysisResult = {
     analysis,
     usage: result?.usage || null,
     platform,
@@ -1539,7 +1623,16 @@ async function invokeVideoAnalysis({ asset, payload }) {
     complianceVerificationAgreement,
     complianceVerificationConsensusUsed,
     complianceVerificationDiagnostics,
+    analysisCacheHit: false,
+    analysisCacheAgeSeconds: 0,
+    analysisCacheVersion: VIDEO_ANALYSIS_CACHE_VERSION,
   };
+
+  if (analysisCacheKey) {
+    await writeAnalysisCache(analysisCacheKey, analysisResult);
+  }
+
+  return analysisResult;
 }
 
 function planMessage(request) {
@@ -1652,6 +1745,9 @@ export const handler = async (event) => {
             complianceVerificationAgreement: result.complianceVerificationAgreement,
             complianceVerificationConsensusUsed: result.complianceVerificationConsensusUsed,
             complianceVerificationDiagnostics: result.complianceVerificationDiagnostics,
+            analysisCacheHit: result.analysisCacheHit === true,
+            analysisCacheAgeSeconds: result.analysisCacheAgeSeconds ?? null,
+            analysisCacheVersion: result.analysisCacheVersion || null,
             asset: {
               id: asset.assetId,
               sizeBytes: asset.sizeBytes,

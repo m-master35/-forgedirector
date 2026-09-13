@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   assertAssetId,
   buildVideoAnalysisPrompt,
+  buildVideoCompliancePrompt,
   normalizeVideoAnalysis,
   normalizeVideoCompliance,
   consensusVideoCompliance,
@@ -29,6 +30,23 @@ assert.match(prompt, /TARGET PLATFORM: TikTok/);
 assert.match(prompt, /OBJECTIVE: conversion/);
 assert.match(prompt, /full video from first frame through final frame/i);
 assert.match(prompt, /at least 95% of the clip/i);
+
+const compliance60 = buildVideoCompliancePrompt({
+  declaredDurationSeconds: 60,
+  requirements: { mustShow: ['motorcycle'] },
+});
+assert.match(compliance60, /CONTIGUOUS REVIEW WINDOWS/i);
+assert.match(compliance60, /0-15s, 15-30s, 30-45s, 45-60s/);
+assert.match(compliance60, /at least 4 review window/i);
+
+const compliance120 = buildVideoCompliancePrompt({
+  declaredDurationSeconds: 120,
+  requirements: { mustShow: ['motorcycle'] },
+});
+assert.match(compliance120, /at least 8 review window/i);
+assert.match(compliance120, /0-15s/);
+assert.match(compliance120, /105-120s/);
+
 
 const injectionPrompt = buildVideoAnalysisPrompt({
   platform: 'TikTok',

@@ -372,16 +372,48 @@ components:
             complianceVerificationModelId:
               type: string
               nullable: true
-              description: Bedrock model used for the authoritative blind compliance verification.
+              description: First Bedrock model that produced a usable blind compliance verification.
+            complianceVerificationModelIds:
+              type: array
+              description: Blind verifier model IDs that produced usable evidence for the final consensus.
+              items:
+                type: string
             complianceVerificationUsage:
               type: object
               nullable: true
               additionalProperties: true
+              description: Aggregate token usage from blind compliance verification calls. Cached responses report zero verifier usage.
             complianceVerificationCoverage:
               type: object
               nullable: true
               additionalProperties: true
-              description: Independent full-duration coverage evidence from the blind compliance pass.
+              description: Best independent full-duration coverage evidence from the blind compliance verifier set.
+            complianceVerificationAgreement:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: Consensus metadata showing evidence-source agreement, whether primary full-duration evidence contributed, and the number of usable blind verifiers.
+            complianceVerificationConsensusUsed:
+              type: boolean
+              description: True when more than one usable evidence source contributed to the final compliance decision.
+            complianceVerificationDiagnostics:
+              type: array
+              description: Non-sensitive diagnostic records describing verifier usability, recovery, and coverage outcomes.
+              items:
+                type: object
+                additionalProperties: true
+            analysisCacheHit:
+              type: boolean
+              description: True when an identical normalized video-analysis request was served from ForgeDirector's private idempotence cache.
+            analysisCacheAgeSeconds:
+              type: integer
+              nullable: true
+              minimum: 0
+              description: Age of the cached analysis in seconds when analysisCacheHit is true.
+            analysisCacheVersion:
+              type: string
+              nullable: true
+              description: Internal cache-contract version used to prevent stale results crossing incompatible analysis versions.
             asset:
               type: object
               additionalProperties: true

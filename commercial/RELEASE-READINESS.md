@@ -32,7 +32,7 @@ Latest repeated genuine/generated-video benchmark on the same current runtime:
 - Overall score range: 0 for all six clips after caching.
 - Hook score range: 0 for all six clips.
 - Quality-gate span: 0 for all six clips.
-- Cached responses return in about 0.27–0.33 seconds in the benchmark and consume zero additional model tokens.
+- Cached responses return in about 0.3–0.4 seconds in the current-runtime benchmark and consume zero additional model tokens.
 
 ### Performance / concurrency — PASS
 Representative live production benchmark:

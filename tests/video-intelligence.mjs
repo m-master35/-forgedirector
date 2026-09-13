@@ -9,6 +9,7 @@ import {
   applyVerifiedVideoCompliance,
   assessVideoAnalysisCoverage,
   isAuthoritativeVerifierCoverage,
+  minimumVideoCoverageSegments,
   videoFormatFromContentType,
 } from '../backend/video-intelligence.mjs';
 
@@ -30,6 +31,45 @@ assert.match(prompt, /TARGET PLATFORM: TikTok/);
 assert.match(prompt, /OBJECTIVE: conversion/);
 assert.match(prompt, /full video from first frame through final frame/i);
 assert.match(prompt, /at least 95% of the clip/i);
+
+
+assert.equal(minimumVideoCoverageSegments(5), 1);
+assert.equal(minimumVideoCoverageSegments(12), 2);
+assert.equal(minimumVideoCoverageSegments(30), 3);
+assert.equal(minimumVideoCoverageSegments(60), 4);
+assert.equal(minimumVideoCoverageSegments(120), 8);
+
+const sixtySecondCoverage = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 0, endSeconds: 15 },
+    { startSeconds: 15, endSeconds: 30 },
+    { startSeconds: 30, endSeconds: 45 },
+    { startSeconds: 45, endSeconds: 60 },
+  ],
+}, 60);
+assert.equal(sixtySecondCoverage.minimumTimelineSegments, 4);
+assert.equal(sixtySecondCoverage.fullDurationReviewed, true);
+
+const sixtySecondTooFewSegments = assessVideoAnalysisCoverage({
+  timeline: [
+    { startSeconds: 0, endSeconds: 20 },
+    { startSeconds: 20, endSeconds: 40 },
+    { startSeconds: 40, endSeconds: 60 },
+  ],
+}, 60);
+assert.equal(sixtySecondTooFewSegments.coverageRatio, 1);
+assert.equal(sixtySecondTooFewSegments.minimumTimelineSegments, 4);
+assert.equal(sixtySecondTooFewSegments.fullDurationReviewed, false);
+
+const oneTwentyCoverage = assessVideoAnalysisCoverage({
+  timeline: Array.from({ length: 8 }, (_, index) => ({
+    startSeconds: index * 15,
+    endSeconds: (index + 1) * 15,
+  })),
+}, 120);
+assert.equal(oneTwentyCoverage.minimumTimelineSegments, 8);
+assert.equal(oneTwentyCoverage.fullDurationReviewed, true);
+
 
 const compliance60 = buildVideoCompliancePrompt({
   declaredDurationSeconds: 60,

@@ -11,6 +11,7 @@ from pathlib import Path
 API_URL=os.environ["API_URL"].rstrip("/")
 SECRET=os.environ["RAPIDAPI_PROXY_SECRET"]
 ROOT=Path(tempfile.mkdtemp(prefix="fd-video-repeat-"))
+BENCH_NONCE=f"{os.environ.get('GITHUB_RUN_ID','local')}-{os.environ.get('GITHUB_RUN_ATTEMPT','1')}-{time.time_ns()}"
 
 SOURCES=[
     {
@@ -102,14 +103,24 @@ for item in SOURCES:
     for run in range(1,RUNS_PER_CASE+1):
         us,asset,_=upload(path)
         if us!=200:
-            rows.append((item["name"],run,us,"upload-fail","-","-")); failures.append(f"{item['name']} run {run}: upload failed HTTP {us}"); continue
+            rows.append((item["name"],run,us,"upload-fail","-","-",None)); failures.append(f"{item['name']} run {run}: upload failed HTTP {us}"); continue
         probe=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(path)],capture_output=True,text=True,check=True)
         duration=float(probe.stdout.strip())
-        payload={"assetId":asset,"platform":"General","objective":"awareness","durationSeconds":duration,"context":"Repeatability benchmark. Audio removed. Judge visible facts only across the entire clip.","requirements":item["requirements"]}
+        payload={"assetId":asset,"platform":"General","objective":"awareness","durationSeconds":duration,"context":f"Repeatability benchmark {BENCH_NONCE} for {item['name']}. Audio removed. Judge visible facts only across the entire clip.","requirements":item["requirements"]}
         start=time.time(); status,result=http_json("/v1/analyze",payload,timeout=180); elapsed=round(time.time()-start,2)
         if status!=200:
-            rows.append((item["name"],run,status,"analyze-fail","-",elapsed)); failures.append(f"{item['name']} run {run}: HTTP {status} {result.get('error','')}"); continue
+            rows.append((item["name"],run,status,"analyze-fail","-",elapsed,None)); failures.append(f"{item['name']} run {run}: HTTP {status} {result.get('error','')}"); continue
         analysis=result.get("analysis") or {}
+        meta=result.get("meta") or {}
+        cache_hit=meta.get("analysisCacheHit")
+        if run == 1 and cache_hit is not False:
+            failures.append(f"{item['name']} run {run}: expected fresh analysis cache miss, got {cache_hit}")
+        if run > 1 and cache_hit is not True:
+            failures.append(f"{item['name']} run {run}: expected analysis cache hit, got {cache_hit}")
+        if run > 1:
+            usage=meta.get("usage") or {}
+            if any(int(usage.get(k) or 0) != 0 for k in ("inputTokens","outputTokens","totalTokens")):
+                failures.append(f"{item['name']} run {run}: cache hit consumed model tokens {usage}")
         mismatches=[]
         for typ,rule,expected in item["expected"]:
             actual=find_check(analysis,typ,rule)
@@ -128,7 +139,7 @@ for item in SOURCES:
         if isinstance(hook,(int,float)): observations[item["name"]]["hook"].append(float(hook))
         if gate: observations[item["name"]]["gate"].append(gate)
         verdict="pass" if (not mismatches and speech_clean and coverage_ok) else "FAIL"
-        rows.append((item["name"],run,status,verdict,gate,elapsed))
+        rows.append((item["name"],run,status,verdict,gate,elapsed,cache_hit))
 
 gate_rank={"regenerate":0,"revise":1,"accept":2}
 stability_rows=[]
@@ -147,8 +158,8 @@ for item in SOURCES:
     if gate_span>1: failures.append(f"{name}: quality gate flipped between accept and regenerate")
 
 print("# ForgeDirector video QA repeatability benchmark\n")
-print("| Clip | Run | HTTP | Compliance | Gate | Seconds |\n|---|---:|---:|---|---|---:|")
-for row in rows: print(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} | {row[5]} |")
+print("| Clip | Run | HTTP | Compliance | Gate | Seconds | Cache hit |\n|---|---:|---:|---|---|---:|---|")
+for row in rows: print(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} | {row[5]} | {row[6]} |")
 print("\n## Score and gate stability\n| Clip | Overall range | Hook range | Gate span | Stable |\n|---|---:|---:|---:|---|")
 for name,overall_range,hook_range,gate_span,stable in stability_rows: print(f"| {name} | {overall_range:.1f} | {hook_range:.1f} | {gate_span} | {'yes' if stable else 'NO'} |")
 print()
@@ -165,7 +176,7 @@ evidence={
     "maxOverallRange":MAX_OVERALL_RANGE,
     "maxHookRange":MAX_HOOK_RANGE,
     "rows":[
-        {"clip":r[0],"run":r[1],"http":r[2],"compliance":r[3],"gate":r[4],"seconds":r[5]}
+        {"clip":r[0],"run":r[1],"http":r[2],"compliance":r[3],"gate":r[4],"seconds":r[5],"cacheHit":r[6]}
         for r in rows
     ],
     "stability":[

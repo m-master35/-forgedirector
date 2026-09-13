@@ -157,6 +157,7 @@ requirements={"mustShow":["motorcycle"],"mustNotShow":["wine bottle"],"ctaRequir
 add_video("video-12s-requirements",12,requirements)
 add_video("video-30s-requirements",30,requirements)
 add_video("video-60s-requirements",60,requirements)
+add_video("video-120s-requirements",120,requirements)
 
 print("# ForgeDirector live unit-cost profile")
 print()

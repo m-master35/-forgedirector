@@ -135,3 +135,38 @@ Sent tailored outreach with the live demo and RapidAPI listing to:
 - Bannerbear — support@bannerbear.com
 
 This batch was selected from the researched list because each has a programmable or asynchronous video-generation path where a post-render QA gate can be explained clearly.
+
+
+## Decision-maker research — 2026-09-14
+
+Purpose: improve reply odds by moving the best-fit accounts from generic support inboxes to a specific founder, partnerships lead, or product-facing operator. Do not guess private email addresses or use scraped personal contact data; prefer public LinkedIn/X profiles and official partnership/contact routes.
+
+### Tier 1 — strongest direct targets
+
+| Company | Person | Role / why this person | Public route | Follow-up angle |
+| --- | --- | --- | --- | --- |
+| Creatify | Yinan (Steven) Na | Co-founder & CEO; publicly active on AI ad automation and agentic creative workflows | https://www.linkedin.com/in/nayinan | Position ForgeDirector as the independent QA/release gate between automated ad generation and campaign launch. |
+| JoggAI | Anbang Xu | Founder; publicly identifies himself as leading JoggAI | https://www.linkedin.com/in/anbang-xu-82283789 | Emphasize UGC/ad output QA, explicit requirement checks, and automatic regenerate decisions. |
+| Creatomate | Casper Kloppenburg | Co-founder; technical founder responsible for product/API and customer support | https://nl.linkedin.com/in/casper-kloppenburg-5774a713b | Callback → ForgeDirector QA → publish/deliver. Small founder-led team makes a direct technical integration pitch appropriate. |
+| JSON2Video | Joaquim Cardona | Founder/creator; solo-founder style business and public partnership activity | https://www.linkedin.com/company/json2video | Pitch a simple optional post-render QA stage that complements, rather than replaces, JSON2Video rendering. |
+| Plainly | Nebojsa Savicic | Co-founder; actively publishing about AI, automation, Plainly Flows and MCP-adjacent workflows | https://uk.linkedin.com/in/nebojsa-savicic | Frame ForgeDirector as a QA node inside automated Flows after render completion. |
+| Shotstack | Derk Zomer | Co-founder; publicly focused on video infrastructure for AI and developer platform growth | https://au.linkedin.com/in/derkzomer | Strongest message: generator-independent QA primitive for agentic video editing pipelines. |
+| Bannerbear | Jon Yongfook Cockle | Founder; small API-first company, public builder/operator | https://sg.linkedin.com/in/yongfook | Position as an optional QA layer for automated video outputs; keep message concise and founder-to-founder in tone. |
+
+### Tier 2 — good targets, but larger org / less direct fit
+
+| Company | Person | Role / why this person | Public route | Follow-up angle |
+| --- | --- | --- | --- | --- |
+| Synthesia | Brian Jambor | Head of Partnerships; Synthesia publicly offers technology partnerships via API | https://www.linkedin.com/in/brianjambor | Use the technology-partnership framing, not a generic sales pitch. Focus on QA/compliance after personalized video generation. |
+| D-ID | Gil Perry | Co-founder & CEO; technical founder of a large digital-human/video platform | https://www.linkedin.com/in/gil-perry-d-id | Keep high-level: independent post-generation QA for API customers and automated workflows. |
+| Tavus | Hassaan Raza | Co-founder & CEO; highly active publicly | https://www.linkedin.com/in/hassaanraza | Lower priority than before: Tavus has shifted heavily toward real-time PAL/human-computing products, so pitch only if tied to asynchronous generated-video workflows. |
+
+### Important reprioritization
+
+- **VisionStory: deprioritize for partnership outreach.** Its developer platform added structured media understanding for images/audio/video in September 2026, so it now overlaps more directly with ForgeDirector's analysis layer. Keep as a market/competitor watch rather than a top integration target.
+- **Tavus: lower priority.** Public positioning has shifted strongly from asynchronous personalized video toward real-time AI humans / PALs.
+- **Creatify, Plainly, Shotstack, Creatomate, JSON2Video and JoggAI** are the best next human-to-human follow-up targets because the integration seam is clear and the relevant decision-maker is publicly identifiable.
+
+### Recommended timing
+
+Do not send another email today. If there is still no reply after 2-4 business days from the latest email, use one short LinkedIn touch to the Tier 1 person. The message should reference the live demo, explain the exact integration seam in one sentence, and ask whether the QA-gate concept is relevant to their roadmap. Do not repeat the full email pitch.

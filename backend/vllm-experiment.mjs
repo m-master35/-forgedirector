@@ -341,7 +341,7 @@ function aggregateUsage(calls) {
   }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 });
 }
 
-function experimentCacheKey({ asset, request, profile }) {
+export function buildVllmExperimentCacheKey({ asset, request, profile }) {
   const fingerprint = String(asset?.contentFingerprint || '').trim();
   if (!fingerprint) return null;
   const material = stableJson({
@@ -395,7 +395,7 @@ export async function runVllmPruningExperiment({
   }
 
   const profile = resolveVllmProfile(request?.profile);
-  const cacheKey = experimentCacheKey({ asset, request, profile });
+  const cacheKey = buildVllmExperimentCacheKey({ asset, request, profile });
 
   if (cacheKey) {
     const cached = await readAnalysisCache(cacheKey);

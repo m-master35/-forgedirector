@@ -1,0 +1,74 @@
+name: Validate FOCUS Frame Selection Experiment
+
+on:
+  pull_request:
+    paths:
+      - "backend/frame-selection*.mjs"
+      - "experiments/focus/**"
+      - "tests/frame-selection*.mjs"
+      - "tests/focus-media.mjs"
+      - ".github/workflows/focus-experiment-ci.yml"
+      - ".github/workflows/benchmark-focus-frame-selection.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-focus-experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install local video/font tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+
+      - name: Install isolated experiment dependency
+        run: npm install --prefix experiments/focus --ignore-scripts --no-audit --no-fund
+
+      - name: Syntax-check experiment
+        run: |
+          node --check backend/frame-selection.mjs
+          node --check backend/frame-selection-experiment.mjs
+          node --check backend/frame-selection-policy.mjs
+          node --check experiments/focus/benchmark-utils.mjs
+          node --check experiments/focus/selector-overhead.mjs
+          node --check experiments/focus/titan-scorer.mjs
+          node --check experiments/focus/media.mjs
+          node --check experiments/focus/vlm.mjs
+          node --check experiments/focus/run-shadow-benchmark.mjs
+          bash -n experiments/focus/build-corpus.sh
+          python -m json.tool experiments/focus/corpus-manifest.json >/dev/null
+
+      - name: Run selector unit tests
+        run: |
+          node tests/frame-selection.mjs
+          node tests/frame-selection-cache.mjs
+          node tests/frame-selection-policy.mjs
+          node tests/frame-selection-budget.mjs
+
+      - name: Run media edge-case tests
+        run: node tests/focus-media.mjs
+
+      - name: Build controlled timestamp corpus
+        env:
+          FOCUS_SKIP_PUBLIC_DOWNLOADS: "1"
+        run: |
+          chmod +x experiments/focus/build-corpus.sh
+          experiments/focus/build-corpus.sh /tmp/focus-controlled-corpus
+          test -f /tmp/focus-controlled-corpus/black-middle.mp4
+          test -f /tmp/focus-controlled-corpus/required-text-late.mp4
+          test -f /tmp/focus-controlled-corpus/continuity-break.mp4
+          test -f /tmp/focus-controlled-corpus/transition-glitch.mp4
+          test -f /tmp/focus-controlled-corpus/black-middle.ffprobe.json
+
+      - name: Report structural selector overhead
+        run: node experiments/focus/selector-overhead.mjs

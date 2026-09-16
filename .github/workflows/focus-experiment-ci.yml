@@ -58,6 +58,9 @@ jobs:
       - name: Run media edge-case tests
         run: node tests/focus-media.mjs
 
+      - name: Run mocked Bedrock adapter tests
+        run: node tests/focus-benchmark-unit.mjs
+
       - name: Build controlled timestamp corpus
         env:
           FOCUS_SKIP_PUBLIC_DOWNLOADS: "1"

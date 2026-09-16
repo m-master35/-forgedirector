@@ -1,0 +1,232 @@
+{
+  "version": "fd-targeted-corpus-v1",
+  "notes": [
+    "Synthetic localized cases have timestamp-controlled ground truth.",
+    "Real-video controls reuse public sources already used by ForgeDirector's existing live benchmark.",
+    "Global/context-sensitive cases are intentional routing controls and should not be forced through targeted v1."
+  ],
+  "cases": [
+    {
+      "name": "localized-forbidden",
+      "file": "localized-forbidden.mp4",
+      "category": "forbidden_content",
+      "context": "The word RIVAL is forbidden. Inspect the entire video and report exactly where any forbidden visible content appears.",
+      "requirements": {
+        "mustNotShow": [
+          "RIVAL"
+        ]
+      },
+      "expectedChecks": [
+        {
+          "type": "mustNotShow",
+          "rule": "RIVAL",
+          "status": "fail"
+        }
+      ],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:localized-forbidden:0",
+          "defectType": "forbidden_content_presence",
+          "startSeconds": 8,
+          "endSeconds": 10,
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "visible-text-defect",
+      "file": "visible-text-defect.mp4",
+      "category": "visible_text_defect",
+      "context": "The CTA is intended to read START FREE consistently. Report any visible misspelling or text defect and its timestamp.",
+      "requirements": {},
+      "expectedChecks": [],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:visible-text-defect:0",
+          "defectType": "visible_text_defect",
+          "startSeconds": 8,
+          "endSeconds": 10,
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "object-mismatch",
+      "file": "object-mismatch.mp4",
+      "category": "object_product_mismatch",
+      "context": "The product must remain PRODUCT A throughout. Report any localized product/label mismatch and where it occurs.",
+      "requirements": {
+        "continuityRules": [
+          "The product identity and label must remain PRODUCT A throughout"
+        ]
+      },
+      "expectedChecks": [
+        {
+          "type": "continuityRule",
+          "rule": "The product identity and label must remain PRODUCT A throughout",
+          "status": "fail"
+        }
+      ],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:object-mismatch:0",
+          "defectType": "object_product_mismatch",
+          "startSeconds": 9,
+          "endSeconds": 11,
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "localized-artifact",
+      "file": "localized-artifact.mp4",
+      "category": "localized_visual_artifact",
+      "context": "Inspect for localized rendering corruption, severe noise, glitches, distortion or visual artifacts and timestamp them.",
+      "requirements": {},
+      "expectedChecks": [],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:localized-artifact:0",
+          "defectType": "localized_visual_artifact",
+          "startSeconds": 8,
+          "endSeconds": 10,
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "transition-flash",
+      "file": "transition-flash.mp4",
+      "category": "transition_issue",
+      "context": "Inspect transitions and cuts for a localized black flash or transition defect and timestamp it.",
+      "requirements": {},
+      "expectedChecks": [],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:transition-flash:0",
+          "defectType": "transition_issue",
+          "startSeconds": 9.75,
+          "endSeconds": 10.25,
+          "critical": false
+        }
+      ]
+    },
+    {
+      "name": "global-continuity",
+      "file": "global-continuity.mp4",
+      "category": "global_continuity",
+      "context": "The same product should preserve its color throughout. Compare earlier and later scenes.",
+      "requirements": {
+        "continuityRules": [
+          "The product must keep the same color throughout"
+        ]
+      },
+      "expectedChecks": [
+        {
+          "type": "continuityRule",
+          "rule": "The product must keep the same color throughout",
+          "status": "fail"
+        }
+      ],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:global-continuity:0",
+          "defectType": "global_continuity",
+          "startSeconds": 10,
+          "endSeconds": 20,
+          "critical": true
+        }
+      ],
+      "expectedRouting": "whole_video"
+    },
+    {
+      "name": "global-pacing",
+      "file": "global-pacing.mp4",
+      "category": "global_pacing",
+      "context": "Assess pacing across the entire video. This is intentionally a global pacing control.",
+      "requirements": {},
+      "expectedChecks": [],
+      "groundTruth": [
+        {
+          "sourceFindingId": "groundtruth:global-pacing:0",
+          "defectType": "global_pacing",
+          "startSeconds": 0,
+          "endSeconds": 20,
+          "critical": false
+        }
+      ],
+      "expectedRouting": "whole_video"
+    },
+    {
+      "name": "no-defect",
+      "file": "no-defect.mp4",
+      "category": "no_defect",
+      "context": "Clean synthetic control. Report only genuine defects.",
+      "requirements": {
+        "mustNotShow": [
+          "RIVAL"
+        ]
+      },
+      "expectedChecks": [
+        {
+          "type": "mustNotShow",
+          "rule": "RIVAL",
+          "status": "pass"
+        }
+      ],
+      "groundTruth": []
+    },
+    {
+      "name": "real-motorcycle",
+      "file": "real-motorcycle.mp4",
+      "category": "real_video_control",
+      "context": "Existing ForgeDirector real-video benchmark control. Judge visible facts only.",
+      "requirements": {
+        "mustShow": [
+          "motorcycle"
+        ],
+        "mustNotShow": [
+          "wine bottle"
+        ]
+      },
+      "expectedChecks": [
+        {
+          "type": "mustShow",
+          "rule": "motorcycle",
+          "status": "pass"
+        },
+        {
+          "type": "mustNotShow",
+          "rule": "wine bottle",
+          "status": "pass"
+        }
+      ],
+      "groundTruth": []
+    },
+    {
+      "name": "camber-tumbler-ugc",
+      "file": "camber-tumbler-ugc.mp4",
+      "category": "real_video_control",
+      "context": "Existing ForgeDirector real product-video benchmark control. Judge visible facts only.",
+      "requirements": {
+        "mustShow": [
+          "black insulated travel tumbler or coffee tumbler",
+          "person presenting or reviewing the product"
+        ]
+      },
+      "expectedChecks": [
+        {
+          "type": "mustShow",
+          "rule": "black insulated travel tumbler or coffee tumbler",
+          "status": "pass"
+        },
+        {
+          "type": "mustShow",
+          "rule": "person presenting or reviewing the product",
+          "status": "pass"
+        }
+      ],
+      "groundTruth": []
+    }
+  ]
+}

@@ -29,19 +29,6 @@ export function vllmExperimentEnabled(env = process.env) {
   return String(env.FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED || '').trim().toLowerCase() === 'true';
 }
 
-export function experimentalVllmRequest(payload = {}, env = process.env) {
-  const x = payload?.experiment;
-  if (x == null) return null;
-  if (!x || typeof x !== 'object' || Array.isArray(x) || !x.backend) {
-    throw Object.assign(new Error('experiment.backend is required when an experiment block is supplied.'), { statusCode: 400 });
-  }
-  if (String(x.backend).toLowerCase() !== 'vllm') throw Object.assign(new Error('Unsupported video analysis experiment backend.'), { statusCode: 400 });
-  if (!vllmExperimentEnabled(env)) throw Object.assign(new Error('The vLLM video-analysis experiment is disabled.'), { statusCode: 403 });
-  const profileName = String(x.profile || '').trim();
-  if (!VLLM_PRUNING_PROFILES[profileName]) throw Object.assign(new Error(`Unknown vLLM pruning profile: ${profileName || '(missing)'}.`), { statusCode: 400 });
-  return { profileName, profile: VLLM_PRUNING_PROFILES[profileName] };
-}
-
 export function configuredVllmEndpoint(name, env = process.env) {
   const p = VLLM_PRUNING_PROFILES[name];
   if (!p) throw new Error(`Unknown vLLM pruning profile: ${name}`);

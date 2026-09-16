@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {
   VLLM_PRUNING_PROFILES,
+  VLLM_EXPERIMENT_VLLM_VERSION,
+  VLLM_EXPERIMENT_DEFAULT_MODEL,
+  vllmExperimentEnabled,
   vllmLaunchArgs,
   experimentalVllmRequest,
   configuredVllmEndpoint,
@@ -8,6 +11,10 @@ import {
   analyzeWithExperimentalVllm,
 } from '../backend/experimental-vllm.mjs';
 
+assert.equal(VLLM_EXPERIMENT_VLLM_VERSION, '0.29.0');
+assert.equal(VLLM_EXPERIMENT_DEFAULT_MODEL, 'Qwen/Qwen3-VL-8B-Instruct');
+assert.equal(vllmExperimentEnabled({ FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED: 'true' }), true);
+assert.equal(vllmExperimentEnabled({}), false);
 assert.equal(VLLM_PRUNING_PROFILES.baseline.pruningRate, 0);
 assert.deepEqual(vllmLaunchArgs('baseline'), []);
 assert.deepEqual(vllmLaunchArgs('evs-medium'), ['--video-pruning-rate', '0.5', '--video-pruning-method', 'evs']);
@@ -32,15 +39,15 @@ const env = {
   VLLM_EXPERIMENT_ENDPOINTS_JSON: JSON.stringify({
     baseline: {
       baseUrl: 'http://127.0.0.1:8100',
-      model: 'Qwen/Qwen3-VL-4B-Instruct',
-      vllmVersion: '0.28.0',
+      model: 'Qwen/Qwen3-VL-8B-Instruct',
+      vllmVersion: '0.29.0',
       pruningRate: 0,
       pruningMethod: 'evs',
     },
     'vidcom2-medium': {
       baseUrl: 'http://127.0.0.1:8150',
-      model: 'Qwen/Qwen3-VL-4B-Instruct',
-      vllmVersion: '0.28.0',
+      model: 'Qwen/Qwen3-VL-8B-Instruct',
+      vllmVersion: '0.29.0',
       pruningRate: 0.5,
       pruningMethod: 'vidcom2',
     },
@@ -55,7 +62,7 @@ assert.throws(
       'vidcom2-medium': {
         baseUrl: 'http://127.0.0.1:8150',
         model: 'llava-hf/llava-onevision-qwen2-0.5b-ov-hf',
-        vllmVersion: '0.28.0',
+        vllmVersion: '0.29.0',
         pruningRate: 0.5,
         pruningMethod: 'vidcom2',
       },
@@ -106,7 +113,9 @@ let calls = 0;
 const fakeFetch = async (_url, options) => {
   calls += 1;
   const body = JSON.parse(options.body);
-  assert.equal(body.model, 'Qwen/Qwen3-VL-4B-Instruct');
+  assert.equal(body.model, 'Qwen/Qwen3-VL-8B-Instruct');
+  assert.equal(body.max_completion_tokens > 0, true);
+  assert.equal('max_tokens' in body, false);
   assert.ok(body.messages[1].content.some((part) => part.type === 'video_url'));
   return new Response(JSON.stringify({
     choices: [{ message: { content: JSON.stringify(modelObject) } }],

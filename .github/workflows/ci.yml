@@ -35,6 +35,7 @@ jobs:
           node --check backend/video-intelligence.mjs
           node --check backend/frame-selection.mjs
           node --check backend/frame-selection-experiment.mjs
+          node --check backend/frame-selection-policy.mjs
 
       - name: Run commercial QA tests
         run: node tests/commercial-qa.mjs
@@ -53,6 +54,9 @@ jobs:
 
       - name: Run frame selection cache-isolation tests
         run: node tests/frame-selection-cache.mjs
+
+      - name: Run defect-specific frame selection policy tests
+        run: node tests/frame-selection-policy.mjs
 
       - name: Check required project files
         run: |
@@ -75,6 +79,7 @@ jobs:
           test -f backend/video-intelligence.mjs
           test -f backend/frame-selection.mjs
           test -f backend/frame-selection-experiment.mjs
+          test -f backend/frame-selection-policy.mjs
           test -f docs/friction-log.md
           test -f commercial/openapi.yaml
           test -f commercial/pricing.md
@@ -82,6 +87,7 @@ jobs:
           test -f tests/video-intelligence.mjs
           test -f tests/frame-selection.mjs
           test -f tests/frame-selection-cache.mjs
+          test -f tests/frame-selection-policy.mjs
           test -f tests/director-reliability.mjs
           test -f tests/director-fuzz.mjs
 

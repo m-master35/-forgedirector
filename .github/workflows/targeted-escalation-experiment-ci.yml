@@ -1,0 +1,41 @@
+name: Targeted escalation experiment CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/targeted-escalation*.mjs'
+      - 'tests/targeted-escalation*.mjs'
+      - 'experiments/targeted-escalation/**'
+      - 'docs/experiments/targeted-escalation-*.md'
+      - '.github/workflows/targeted-escalation-experiment-ci.yml'
+  push:
+    branches:
+      - experiment/targeted-pro-escalation
+
+permissions:
+  contents: read
+
+jobs:
+  validate-targeted-escalation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check experiment JavaScript syntax
+        run: |
+          node --check backend/targeted-escalation.mjs
+          node --check backend/targeted-escalation-media.mjs
+          node --check tests/targeted-escalation.mjs
+          node --check tests/targeted-escalation-media.mjs
+
+      - name: Run routing, interval, cache and spend tests
+        run: node tests/targeted-escalation.mjs
+
+      - name: Install ffmpeg for isolated media tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Run synthetic extraction tests
+        run: node tests/targeted-escalation-media.mjs

@@ -6,7 +6,9 @@ import {
   assessVideoAnalysisCoverage, isAuthoritativeVerifierCoverage,
 } from './video-intelligence.mjs';
 
-export const VLLM_EXPERIMENT_CACHE_VERSION = 'fd-vllm-pruning-exp-v1|fd-video-analysis-1.5|fd-shortform-v5';
+export const VLLM_EXPERIMENT_VLLM_VERSION = '0.29.0';
+export const VLLM_EXPERIMENT_DEFAULT_MODEL = 'Qwen/Qwen3-VL-8B-Instruct';
+export const VLLM_EXPERIMENT_CACHE_VERSION = 'fd-vllm-pruning-exp-v2|vllm-0.29.0|fd-video-analysis-1.5|fd-shortform-v5';
 export const VLLM_PRUNING_PROFILES = Object.freeze({
   baseline: { level: 'baseline', pruningRate: 0, pruningMethod: 'evs' },
   'evs-conservative': { level: 'conservative', pruningRate: 0.25, pruningMethod: 'evs' },
@@ -23,6 +25,10 @@ export function vllmLaunchArgs(name) {
   return p.pruningRate ? ['--video-pruning-rate', String(p.pruningRate), '--video-pruning-method', p.pruningMethod] : [];
 }
 
+export function vllmExperimentEnabled(env = process.env) {
+  return String(env.FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
 export function experimentalVllmRequest(payload = {}, env = process.env) {
   const x = payload?.experiment;
   if (x == null) return null;
@@ -30,7 +36,7 @@ export function experimentalVllmRequest(payload = {}, env = process.env) {
     throw Object.assign(new Error('experiment.backend is required when an experiment block is supplied.'), { statusCode: 400 });
   }
   if (String(x.backend).toLowerCase() !== 'vllm') throw Object.assign(new Error('Unsupported video analysis experiment backend.'), { statusCode: 400 });
-  if (String(env.FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED || '').toLowerCase() !== 'true') throw Object.assign(new Error('The vLLM video-analysis experiment is disabled.'), { statusCode: 403 });
+  if (!vllmExperimentEnabled(env)) throw Object.assign(new Error('The vLLM video-analysis experiment is disabled.'), { statusCode: 403 });
   const profileName = String(x.profile || '').trim();
   if (!VLLM_PRUNING_PROFILES[profileName]) throw Object.assign(new Error(`Unknown vLLM pruning profile: ${profileName || '(missing)'}.`), { statusCode: 400 });
   return { profileName, profile: VLLM_PRUNING_PROFILES[profileName] };
@@ -50,6 +56,7 @@ export function configuredVllmEndpoint(name, env = process.env) {
     apiKey: String(raw.apiKey || env.VLLM_EXPERIMENT_API_KEY || '').trim(),
   };
   if (!/^https?:\/\//i.test(endpoint.baseUrl) || !endpoint.model || !endpoint.vllmVersion) throw Object.assign(new Error(`vLLM endpoint ${name} requires baseUrl, model, and vllmVersion.`), { statusCode: 503 });
+  if (endpoint.vllmVersion !== VLLM_EXPERIMENT_VLLM_VERSION) throw Object.assign(new Error(`vLLM endpoint ${name} must attest version ${VLLM_EXPERIMENT_VLLM_VERSION}; got ${endpoint.vllmVersion}.`), { statusCode: 503 });
   if (Number(raw.pruningRate) !== p.pruningRate || String(raw.pruningMethod || 'evs').toLowerCase() !== p.pruningMethod) throw Object.assign(new Error(`vLLM endpoint ${name} pruning declaration does not match its profile.`), { statusCode: 503 });
   if (p.pruningMethod === 'vidcom2' && !/qwen3[-_/ ]?vl/i.test(endpoint.model)) throw Object.assign(new Error('VidCom2 experiment profiles require a Qwen3-VL model.'), { statusCode: 503 });
   return endpoint;
@@ -71,10 +78,15 @@ function requestOf(p = {}) { return { platform: String(p.platform || 'General'),
 function parseJson(text) { try { const v = JSON.parse(String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()); return v && typeof v === 'object' && !Array.isArray(v) ? v : null; } catch { return null; } }
 function use(body) { const u = body?.usage || {}; const i = Number(u.prompt_tokens || u.input_tokens || 0), o = Number(u.completion_tokens || u.output_tokens || 0); return { inputTokens: i || 0, outputTokens: o || 0, totalTokens: Number(u.total_tokens || i + o) || 0 }; }
 function add(a, b) { a.inputTokens += b.inputTokens; a.outputTokens += b.outputTokens; a.totalTokens += b.totalTokens; }
+function chatCompletionsUrl(baseUrl) {
+  const root = String(baseUrl || '').replace(/\/+$/, '');
+  return root.endsWith('/v1') ? `${root}/chat/completions` : `${root}/v1/chat/completions`;
+}
+
 async function chat({ endpoint, system, prompt, videoUrl, maxTokens, temperature, fetchImpl }) {
   const headers = { 'content-type': 'application/json' }; if (endpoint.apiKey) headers.authorization = `Bearer ${endpoint.apiKey}`;
   const start = performance.now();
-  const res = await fetchImpl(`${endpoint.baseUrl}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify({ model: endpoint.model, messages: [{ role: 'system', content: system }, { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'video_url', video_url: { url: videoUrl } }] }], max_tokens: maxTokens, temperature, top_p: 0.9 }), signal: AbortSignal.timeout(180000) });
+  const res = await fetchImpl(chatCompletionsUrl(endpoint.baseUrl), { method: 'POST', headers, body: JSON.stringify({ model: endpoint.model, messages: [{ role: 'system', content: system }, { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'video_url', video_url: { url: videoUrl } }] }], max_completion_tokens: maxTokens, temperature, top_p: 0.9 }), signal: AbortSignal.timeout(180000) });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(`vLLM analysis failed with HTTP ${res.status}: ${body?.error?.message || body?.error || 'unknown error'}`), { statusCode: res.status >= 500 ? 503 : 422 });
   return { parsed: parseJson(body?.choices?.[0]?.message?.content), usage: use(body), latencyMs: Math.round((performance.now() - start) * 100) / 100 };

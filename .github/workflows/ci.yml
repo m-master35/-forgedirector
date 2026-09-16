@@ -33,6 +33,7 @@ jobs:
           node --check backend/qa.mjs
           node --check backend/storage.mjs
           node --check backend/video-intelligence.mjs
+          node --check backend/frame-selection.mjs
 
       - name: Run commercial QA tests
         run: node tests/commercial-qa.mjs
@@ -45,6 +46,9 @@ jobs:
 
       - name: Run video intelligence tests
         run: node tests/video-intelligence.mjs
+
+      - name: Run frame selection experiment tests
+        run: node tests/frame-selection.mjs
 
       - name: Check required project files
         run: |
@@ -65,11 +69,13 @@ jobs:
           test -f backend/qa.mjs
           test -f backend/storage.mjs
           test -f backend/video-intelligence.mjs
+          test -f backend/frame-selection.mjs
           test -f docs/friction-log.md
           test -f commercial/openapi.yaml
           test -f commercial/pricing.md
           test -f commercial/listing.md
           test -f tests/video-intelligence.mjs
+          test -f tests/frame-selection.mjs
           test -f tests/director-reliability.mjs
           test -f tests/director-fuzz.mjs
 

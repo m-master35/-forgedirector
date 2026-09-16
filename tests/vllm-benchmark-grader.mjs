@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-vllm-grader-'));
 
@@ -120,7 +121,7 @@ execFileSync(
   process.execPath,
   ['experiments/vllm-pruning/grade-benchmarks.mjs', root],
   {
-    cwd: new URL('..', import.meta.url),
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
     env: { ...process.env, VLLM_MEANINGFUL_REDUCTION: '0.15' },
     stdio: 'pipe',
   },

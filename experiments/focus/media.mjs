@@ -53,9 +53,25 @@ export async function extractOneFpsCandidates(videoPath, outputDirectory) {
     pattern,
   ]);
 
-  const names = (await readdir(outputDirectory))
+  let names = (await readdir(outputDirectory))
     .filter((name) => /^frame-\d{6}\.jpg$/.test(name))
     .sort();
+
+  // ffmpeg's fps=1 filter can emit zero frames for a valid sub-second clip.
+  // Retain the first decodable frame instead of manufacturing a zero-frame
+  // selector input. Malformed media still fails the ffmpeg invocation.
+  if (names.length === 0) {
+    await run('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-i', videoPath,
+      '-frames:v', '1',
+      '-q:v', '2',
+      join(outputDirectory, 'frame-000001.jpg'),
+    ]);
+    names = (await readdir(outputDirectory))
+      .filter((name) => /^frame-\d{6}\.jpg$/.test(name))
+      .sort();
+  }
 
   return names.map((name, index) => ({
     index,

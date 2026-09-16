@@ -118,6 +118,17 @@ export async function resolveVideoAsset(assetId) {
   };
 }
 
+export async function createVideoReadUrl(assetId, expiresInSeconds = 900) {
+  const bucket = requireBucket();
+  const key = assetKey(assetId);
+  const ttl = Math.max(30, Math.min(900, Number(expiresInSeconds) || 900));
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+    { expiresIn: ttl },
+  );
+}
+
 export async function deleteVideoAsset(assetId) {
   const bucket = requireBucket();
   const key = assetKey(assetId);

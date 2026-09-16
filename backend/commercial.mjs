@@ -11,6 +11,7 @@ import {
 import { evaluateCampaign } from './qa.mjs';
 import {
   createVideoUpload,
+  createVideoReadUrl,
   deleteVideoAsset,
   resolveVideoAsset,
   readAnalysisCache,
@@ -29,6 +30,13 @@ import {
   isAuthoritativeVerifierCoverage,
   assertAssetId,
 } from './video-intelligence.mjs';
+import {
+  VLLM_EXPERIMENT_CACHE_VERSION,
+  vllmExperimentEnabled,
+  configuredVllmEndpoint,
+  vllmExperimentCacheKey,
+  analyzeWithExperimentalVllm,
+} from './experimental-vllm.mjs';
 import {
   prepareCreativeRequest,
   parseDirectorJson,
@@ -1635,6 +1643,92 @@ async function invokeVideoAnalysis({ asset, payload }) {
   return analysisResult;
 }
 
+
+async function invokeExperimentalVllmAnalysis({ asset, payload, experiment }) {
+  const endpoint = configuredVllmEndpoint(experiment.profileName);
+
+  // Reuse the production request validators before an experimental request can
+  // reach another runtime. The experiment changes inference, not the public
+  // input contract.
+  const platform = assertPlatform(payload?.platform);
+  const objective = assertObjective(payload?.objective);
+  const audience = assertText(payload?.audience, 'audience', 1000, false);
+  const context = assertText(payload?.context, 'context', 3000, false);
+  const transcript = assertText(payload?.transcript, 'transcript', 12000, false);
+  const declaredDurationSeconds = assertDeclaredDuration(payload?.durationSeconds);
+  const requirements = assertRequirements(payload?.requirements);
+
+  const normalizedRequest = {
+    platform,
+    objective,
+    audience,
+    context,
+    transcript,
+    declaredDurationSeconds,
+    requirements,
+  };
+  const cacheKey = vllmExperimentCacheKey({
+    asset,
+    request: normalizedRequest,
+    endpoint,
+  });
+
+  if (cacheKey) {
+    const cached = await readAnalysisCache(cacheKey);
+    if (cached?.value?.analysis) {
+      return {
+        ...cached.value,
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        complianceVerificationUsage: cached.value.complianceVerificationUsage
+          ? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+          : null,
+        performance: {
+          modelCalls: 0,
+          modelCallLatenciesMs: [],
+          totalModelLatencyMs: 0,
+          cachedFreshPerformance: cached.value.performance || null,
+        },
+        analysisCacheHit: true,
+        analysisCacheAgeSeconds: cached.ageSeconds,
+        analysisCacheVersion: VLLM_EXPERIMENT_CACHE_VERSION,
+      };
+    }
+  }
+
+  // vLLM may fetch the video separately for primary analysis and blind
+  // verification, so use the existing maximum upload-ticket lifetime rather
+  // than a single-request-sized URL.
+  const videoUrl = await createVideoReadUrl(asset.assetId, 900);
+  const result = await analyzeWithExperimentalVllm({
+    payload: {
+      platform,
+      objective,
+      audience,
+      context,
+      transcript,
+      durationSeconds: declaredDurationSeconds,
+      requirements,
+    },
+    videoUrl,
+    endpoint,
+  });
+
+  const experimentalResult = {
+    ...result,
+    platform,
+    objective,
+    requirements,
+    modelId: endpoint.model,
+    analysisBackend: 'vllm',
+    analysisCacheHit: false,
+    analysisCacheAgeSeconds: 0,
+    analysisCacheVersion: VLLM_EXPERIMENT_CACHE_VERSION,
+  };
+
+  if (cacheKey) await writeAnalysisCache(cacheKey, experimentalResult);
+  return experimentalResult;
+}
+
 function planMessage(request) {
   const constraints = Object.keys(request?.constraints || {}).length
     ? `\n\nNORMALIZED USER CONSTRAINTS:\n${JSON.stringify(request.constraints)}`
@@ -1718,6 +1812,65 @@ export const handler = async (event) => {
         },
         requestId,
       });
+    }
+
+    if (method === 'POST' && path === '/v1/experimental/analyze-vllm') {
+      if (!vllmExperimentEnabled()) {
+        const error = new Error('The vLLM video-analysis experiment is disabled.');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const assetId = assertAssetId(assertText(payload?.assetId, 'assetId', 100));
+      const profileName = assertText(payload?.profile, 'profile', 100);
+      try {
+        const asset = await resolveVideoAsset(assetId);
+        const result = await invokeExperimentalVllmAnalysis({
+          asset,
+          payload,
+          experiment: { profileName },
+        });
+        return response(200, {
+          analysis: result.analysis,
+          meta: {
+            operation: 'experimental-analyze-vllm',
+            experimental: true,
+            analysisBackend: 'vllm',
+            experiment: result.experiment,
+            performance: result.performance,
+            modelId: result.modelId,
+            platform: result.platform,
+            objective: result.objective,
+            requirementsApplied: Object.keys(result.requirements || {}).length > 0,
+            analysisRetryUsed: result.retryUsed,
+            coverageRetryUsed: result.coverageRetryUsed,
+            fallbackModelUsed: false,
+            complianceVerificationUsed: result.complianceVerificationUsed,
+            complianceVerificationRetryUsed: result.complianceVerificationRetryUsed,
+            complianceVerificationModelId: result.complianceVerificationModelId,
+            complianceVerificationModelIds: result.complianceVerificationModelIds,
+            complianceVerificationUsage: result.complianceVerificationUsage,
+            complianceVerificationCoverage: result.complianceVerificationCoverage,
+            complianceVerificationAgreement: result.complianceVerificationAgreement,
+            complianceVerificationConsensusUsed: result.complianceVerificationConsensusUsed,
+            complianceVerificationDiagnostics: result.complianceVerificationDiagnostics,
+            analysisCacheHit: result.analysisCacheHit === true,
+            analysisCacheAgeSeconds: result.analysisCacheAgeSeconds ?? null,
+            analysisCacheVersion: result.analysisCacheVersion || null,
+            asset: {
+              id: asset.assetId,
+              sizeBytes: asset.sizeBytes,
+              contentType: asset.contentType,
+              deletedAfterAnalysis: true,
+            },
+            usage: result.usage,
+            scoringNotice: 'Experimental vLLM path. Scores are heuristic creative-quality assessments, not predictions of views, sales, retention, ROAS, or virality.',
+            requestId,
+          },
+        });
+      } finally {
+        await deleteVideoAsset(assetId);
+      }
     }
 
     if (method === 'POST' && path === '/v1/analyze') {

@@ -18,8 +18,10 @@ const expectationsPath = path.join(corpusDir, 'expectations.json');
 const sourceHarness = path.resolve('tests/run-live-video-benchmark.sh');
 const outDir = path.resolve(process.env.VLLM_BENCH_OUT || 'benchmark-vllm');
 const baseUrl = String(process.env.VLLM_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
-const model = process.env.VLLM_MODEL || 'Qwen/Qwen3-VL-4B-Instruct';
-const vllmVersion = process.env.VLLM_VERSION || '0.28.0';
+const model = process.env.VLLM_MODEL || 'Qwen/Qwen3-VL-8B-Instruct';
+const vllmVersion = process.env.VLLM_VERSION || '0.29.0';
+const modelRevision = String(process.env.VLLM_MODEL_REVISION || '').trim() || null;
+const skipWarmup = String(process.env.VLLM_BENCH_SKIP_WARMUP || '').toLowerCase() === 'true';
 const gpuHourlyUsd = Number(process.env.VLLM_GPU_HOURLY_USD || 0);
 const localGpuSampling = /https?:\/\/(?:127\.0\.0\.1|localhost)(?::|\/|$)/i.test(baseUrl)
   && String(process.env.VLLM_SAMPLE_LOCAL_GPU || 'true').toLowerCase() !== 'false';
@@ -93,6 +95,14 @@ function metricDelta(before, after, name) {
   const a = Number(before?.[name]);
   const b = Number(after?.[name]);
   return Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, b - a) : null;
+}
+
+function metricDeltaAny(before, after, names) {
+  for (const name of names) {
+    const value = metricDelta(before, after, name);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
 }
 
 async function observeDuring(work) {
@@ -173,6 +183,28 @@ if (!servedIds.includes(model)) {
   throw new Error(`Configured model ${model} is not reported by ${baseUrl}/v1/models (${servedIds.join(', ') || 'none'})`);
 }
 
+if (!skipWarmup) {
+  const warmupFile = path.join(outDir, '.warmup.mp4');
+  execFileSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'color=c=0x101828:s=320x320:d=2:r=8',
+    '-vf', 'drawbox=x=80:y=80:w=160:h=160:color=white@1:t=fill',
+    '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+    warmupFile,
+  ]);
+  await analyzeWithExperimentalVllm({
+    payload: {
+      platform: 'General',
+      objective: 'awareness',
+      durationSeconds: 2,
+      context: 'Benchmark warm-up clip. Judge visible facts only.',
+    },
+    videoUrl: dataVideoUrl(warmupFile),
+    endpoint,
+  });
+  fs.rmSync(warmupFile, { force: true });
+}
+
 const rows = [];
 for (const expected of expectations.cases || []) {
   const call = payloadByName.get(expected.name);
@@ -207,9 +239,9 @@ for (const expected of expectations.cases || []) {
       performance: result.performance,
       wallLatencyMs: Math.round(observed.elapsedMs * 100) / 100,
       metrics: {
-        promptTokensCounterDelta: metricDelta(before, after, 'vllm:prompt_tokens_total'),
-        generationTokensCounterDelta: metricDelta(before, after, 'vllm:generation_tokens_total'),
-        requestSuccessCounterDelta: metricDelta(before, after, 'vllm:request_success_total'),
+        promptTokensCounterDelta: metricDeltaAny(before, after, ['vllm:prompt_tokens_total', 'vllm:prompt_tokens']),
+        generationTokensCounterDelta: metricDeltaAny(before, after, ['vllm:generation_tokens_total', 'vllm:generation_tokens']),
+        requestSuccessCounterDelta: metricDeltaAny(before, after, ['vllm:request_success_total', 'vllm:request_success']),
         kvCacheUsageBefore: Number.isFinite(Number(before?.['vllm:kv_cache_usage_perc'])) ? Number(before['vllm:kv_cache_usage_perc']) : null,
         kvCacheUsagePeak: observed.peakKv,
         kvCacheUsageAfter: Number.isFinite(Number(after?.['vllm:kv_cache_usage_perc'])) ? Number(after['vllm:kv_cache_usage_perc']) : null,
@@ -243,7 +275,14 @@ const report = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   profile: { name: profileName, ...profile },
-  runtime: { baseUrl, model, vllmVersion, gpuHourlyUsd: gpuHourlyUsd || null },
+  runtime: {
+    baseUrl,
+    model,
+    modelRevision,
+    vllmVersion,
+    gpuHourlyUsd: gpuHourlyUsd || null,
+    warmupPerformed: !skipWarmup,
+  },
   corpus: { directory: corpusDir, cases: rows.length },
   summary: {
     successfulCases: successful.length,

@@ -41,16 +41,7 @@ function issueText(defectType) {
 }
 
 function structuralLiteFixture(caseDef, durationSeconds) {
-  const timeline = [
-    {
-      startSeconds: 0,
-      endSeconds: durationSeconds,
-      purpose: 'other',
-      visual: 'Structural benchmark fixture.',
-      issues: [],
-      recommendations: [],
-    },
-  ];
+  const timeline = [];
   const checks = [];
 
   for (const expected of caseDef.expectedChecks || []) {
@@ -70,17 +61,26 @@ function structuralLiteFixture(caseDef, durationSeconds) {
   }
 
   for (const truth of caseDef.groundTruth || []) {
-    if (truth.defectType === 'forbidden_content_presence') continue;
-
     timeline.push({
       startSeconds: truth.startSeconds,
       endSeconds: truth.endSeconds,
       purpose: truth.defectType === 'transition_issue' ? 'transition' : 'other',
       visual: 'Timestamp-controlled structural defect fixture.',
-      issues: [issueText(truth.defectType)],
+      issues: truth.defectType === 'forbidden_content_presence'
+        ? []
+        : [issueText(truth.defectType)],
       recommendations: [],
     });
   }
+
+  timeline.push({
+    startSeconds: 0,
+    endSeconds: durationSeconds,
+    purpose: 'other',
+    visual: 'Structural benchmark full-video coverage fixture.',
+    issues: [],
+    recommendations: [],
+  });
 
   return {
     timeline,

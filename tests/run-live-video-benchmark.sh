@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${API_URL:?API_URL is required}"
-: "${RAPIDAPI_PROXY_SECRET:?RAPIDAPI_PROXY_SECRET is required}"
+CORPUS_ONLY="${FORGEDIRECTOR_CORPUS_ONLY:-0}"
+if [ "$CORPUS_ONLY" != "1" ]; then
+  : "${API_URL:?API_URL is required}"
+  : "${RAPIDAPI_PROXY_SECRET:?RAPIDAPI_PROXY_SECRET is required}"
+fi
 
 OUT="${1:-benchmark-results}"
 VID="$OUT/videos"
@@ -316,6 +319,11 @@ cat > "$OUT/expectations.json" <<'JSON'
   ]
 }
 JSON
+
+if [ "$CORPUS_ONLY" = "1" ]; then
+  echo "Built ForgeDirector's labeled video corpus at $OUT without calling an analysis provider."
+  exit 0
+fi
 
 analyze_case() {
   local name="$1"

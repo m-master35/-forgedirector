@@ -34,6 +34,9 @@ jobs:
           node --check backend/storage.mjs
           node --check backend/video-intelligence.mjs
           node --check backend/experimental-vllm.mjs
+          node --check experiments/vllm-pruning/run-benchmark.mjs
+          node --check experiments/vllm-pruning/grade-benchmarks.mjs
+          bash -n experiments/vllm-pruning/launch-profile.sh
 
       - name: Run commercial QA tests
         run: node tests/commercial-qa.mjs
@@ -76,6 +79,9 @@ jobs:
           test -f tests/video-intelligence.mjs
           test -f tests/experimental-vllm.mjs
           test -f docs/vllm-video-token-pruning-experiment.md
+          test -f experiments/vllm-pruning/launch-profile.sh
+          test -f experiments/vllm-pruning/run-benchmark.mjs
+          test -f experiments/vllm-pruning/grade-benchmarks.mjs
           test -f tests/director-reliability.mjs
           test -f tests/director-fuzz.mjs
 

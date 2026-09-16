@@ -6,7 +6,7 @@ import {
   buildVllmExperimentCacheKey,
   resolveVllmProfile,
   vllmExperimentEnabled,
-} from '../backend/vllm-experiment.mjs';
+} from '../backend/vllm-experiment-config.mjs';
 
 assert.match(VLLM_EXPERIMENT_VERSION, /vllm-0\.29\.0/);
 

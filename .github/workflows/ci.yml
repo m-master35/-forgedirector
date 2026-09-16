@@ -51,6 +51,7 @@ jobs:
         run: |
           node tests/video-intelligence.mjs
           node tests/experimental-vllm.mjs
+          node tests/vllm-benchmark-grader.mjs
 
       - name: Check required project files
         run: |
@@ -78,6 +79,7 @@ jobs:
           test -f commercial/listing.md
           test -f tests/video-intelligence.mjs
           test -f tests/experimental-vllm.mjs
+          test -f tests/vllm-benchmark-grader.mjs
           test -f docs/vllm-video-token-pruning-experiment.md
           test -f experiments/vllm-pruning/launch-profile.sh
           test -f experiments/vllm-pruning/run-benchmark.mjs

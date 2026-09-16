@@ -18,7 +18,6 @@ const ANALYSIS_CACHE_PREFIX = String(process.env.ANALYSIS_CACHE_PREFIX || 'analy
 const ANALYSIS_CACHE_TTL_SECONDS = Number(process.env.ANALYSIS_CACHE_TTL_SECONDS || 86400);
 const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_BYTES || 31457280);
 const UPLOAD_URL_TTL_SECONDS = Number(process.env.UPLOAD_URL_TTL_SECONDS || 900);
-const EXPERIMENT_READ_URL_TTL_SECONDS = Number(process.env.VLLM_EXPERIMENT_READ_URL_TTL_SECONDS || 900);
 
 function requireBucket() {
   if (!VIDEO_BUCKET) {
@@ -127,16 +126,6 @@ export async function createVideoReadUrl(assetId, expiresInSeconds = 900) {
     s3,
     new GetObjectCommand({ Bucket: bucket, Key: key }),
     { expiresIn: ttl },
-  );
-}
-
-export async function createPrivateVideoReadUrl(assetId) {
-  const bucket = requireBucket();
-  const key = assetKey(assetId);
-  return getSignedUrl(
-    s3,
-    new GetObjectCommand({ Bucket: bucket, Key: key }),
-    { expiresIn: EXPERIMENT_READ_URL_TTL_SECONDS },
   );
 }
 

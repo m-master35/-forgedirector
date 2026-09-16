@@ -55,6 +55,8 @@ for (const [name, report] of reports) {
   const s = report.summary || {};
   const bs = baseline.summary || {};
   const inputTokenReduction = reduction(bs.totalInputTokens, s.totalInputTokens);
+  const prefillKvTokenReduction = reduction(bs.totalPrefillKvComputedTokens, s.totalPrefillKvComputedTokens);
+  const prefillTimeReduction = reduction(bs.totalPrefillTimeSeconds, s.totalPrefillTimeSeconds);
   const latencyReduction = reduction(bs.totalWallMs, s.totalWallMs);
   const kvReduction = reduction(bs.peakKvCacheUsagePerc, s.peakKvCacheUsagePerc);
   const gpuMemoryReduction = reduction(bs.peakGpuMemoryMiB, s.peakGpuMemoryMiB);
@@ -67,8 +69,13 @@ for (const [name, report] of reports) {
     && Number(s.coverageFailures || 0) === 0
     && Number(s.noSpeechFailures || 0) === 0
     && Number(s.gateFailures || 0) === 0;
-  const meaningfulResourceGain = [inputTokenReduction, latencyReduction, kvReduction]
-    .some((value) => Number.isFinite(value) && value >= threshold);
+  const meaningfulResourceGain = [
+    inputTokenReduction,
+    prefillKvTokenReduction,
+    prefillTimeReduction,
+    latencyReduction,
+    kvReduction,
+  ].some((value) => Number.isFinite(value) && value >= threshold);
 
   let decision = 'no_material_resource_gain';
   if (!qualityClean || newFalseNegatives > 0) decision = 'reject_quality';
@@ -90,6 +97,8 @@ for (const [name, report] of reports) {
     },
     reductions: {
       inputTokens: inputTokenReduction,
+      prefillKvComputedTokens: prefillKvTokenReduction,
+      prefillTime: prefillTimeReduction,
       wallLatency: latencyReduction,
       peakKvCacheUsage: kvReduction,
       peakGpuMemory: gpuMemoryReduction,
@@ -118,9 +127,9 @@ const md = [
   `- Baseline quality clean: **${baselineQualityClean ? 'yes' : 'NO'}**`,
   `- Meaningful resource reduction threshold: **${percent(threshold)}**`,
   '',
-  '| Profile | Decision | False negatives | Input-token reduction | Latency reduction | Peak-KV reduction | GPU-memory reduction | Cost reduction | Timestamp MAE |',
-  '|---|---|---:|---:|---:|---:|---:|---:|---:|',
-  ...decisions.map((item) => `| ${item.profile} | ${item.decision} | ${item.quality.falseNegatives} | ${percent(item.reductions.inputTokens)} | ${percent(item.reductions.wallLatency)} | ${percent(item.reductions.peakKvCacheUsage)} | ${percent(item.reductions.peakGpuMemory)} | ${percent(item.reductions.estimatedCost)} | ${Number.isFinite(item.timestampDrift.meanAbsoluteSeconds) ? `${item.timestampDrift.meanAbsoluteSeconds.toFixed(2)}s` : 'n/a'} |`),
+  '| Profile | Decision | False negatives | Input-token reduction | Prefill-KV-token reduction | Prefill-time reduction | Latency reduction | Peak-KV reduction | GPU-memory reduction | Cost reduction | Timestamp MAE |',
+  '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
+  ...decisions.map((item) => `| ${item.profile} | ${item.decision} | ${item.quality.falseNegatives} | ${percent(item.reductions.inputTokens)} | ${percent(item.reductions.prefillKvComputedTokens)} | ${percent(item.reductions.prefillTime)} | ${percent(item.reductions.wallLatency)} | ${percent(item.reductions.peakKvCacheUsage)} | ${percent(item.reductions.peakGpuMemory)} | ${percent(item.reductions.estimatedCost)} | ${Number.isFinite(item.timestampDrift.meanAbsoluteSeconds) ? `${item.timestampDrift.meanAbsoluteSeconds.toFixed(2)}s` : 'n/a'} |`),
   '',
   'No result in this report authorizes production promotion.',
   '',

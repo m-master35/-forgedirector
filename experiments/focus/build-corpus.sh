@@ -75,10 +75,12 @@ download_and_normalize() {
   rm -f "$src"
 }
 
-download_and_normalize "real-motorcycle" \
-  "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/short-video/sample-output/assets/short-video.mp4"
-download_and_normalize "real-wine" \
-  "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/wine-label/sample-output/assets/05-hero.mp4"
+if [ "${FOCUS_SKIP_PUBLIC_DOWNLOADS:-0}" != "1" ]; then
+  download_and_normalize "real-motorcycle" \
+    "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/short-video/sample-output/assets/short-video.mp4"
+  download_and_normalize "real-wine" \
+    "https://raw.githubusercontent.com/tryAGI/Runway.Cli.Examples/main/examples/wine-label/sample-output/assets/05-hero.mp4"
+fi
 
 for video in "$ROOT"/*.mp4; do
   base="$(basename "$video" .mp4)"

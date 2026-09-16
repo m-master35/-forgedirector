@@ -31,6 +31,10 @@ import {
   assertAssetId,
 } from './video-intelligence.mjs';
 import {
+  vllmExperimentEnabled,
+  runVllmPruningExperiment,
+} from './vllm-experiment.mjs';
+import {
   VLLM_EXPERIMENT_CACHE_VERSION,
   experimentalVllmRequest,
   configuredVllmEndpoint,
@@ -1812,6 +1816,63 @@ export const handler = async (event) => {
         },
         requestId,
       });
+    }
+
+    if (method === 'POST' && path === '/v1/experimental/analyze-vllm') {
+      if (!vllmExperimentEnabled()) {
+        const error = new Error('The vLLM pruning experiment is disabled.');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const assetId = assertAssetId(assertText(payload?.assetId, 'assetId', 100));
+      const request = {
+        profile: assertText(payload?.profile, 'profile', 100),
+        platform: assertPlatform(payload?.platform),
+        objective: assertObjective(payload?.objective),
+        audience: assertText(payload?.audience, 'audience', 1000, false),
+        context: assertText(payload?.context, 'context', 3000, false),
+        transcript: assertText(payload?.transcript, 'transcript', 12000, false),
+        declaredDurationSeconds: assertDeclaredDuration(payload?.durationSeconds),
+        requirements: assertRequirements(payload?.requirements),
+      };
+
+      try {
+        const asset = await resolveVideoAsset(assetId);
+        const videoUrl = await createPrivateVideoReadUrl(assetId);
+        const result = await runVllmPruningExperiment({ asset, videoUrl, request });
+        return response(200, {
+          analysis: result.analysis,
+          meta: {
+            operation: 'experimental-analyze-vllm',
+            experimental: true,
+            modelId: result.modelId,
+            profile: result.profile,
+            experimentVersion: result.experimentVersion,
+            usage: result.usage,
+            calls: result.calls,
+            analysisRetryUsed: result.retryUsed,
+            coverageRetryUsed: result.coverageRetryUsed,
+            complianceVerificationUsed: result.complianceVerificationUsed,
+            complianceVerificationRetryUsed: result.complianceVerificationRetryUsed,
+            complianceVerificationCoverage: result.complianceVerificationCoverage,
+            complianceVerificationAgreement: result.complianceVerificationAgreement,
+            analysisCacheHit: result.analysisCacheHit === true,
+            analysisCacheAgeSeconds: result.analysisCacheAgeSeconds ?? null,
+            analysisCacheVersion: result.analysisCacheVersion || null,
+            asset: {
+              id: asset.assetId,
+              sizeBytes: asset.sizeBytes,
+              contentType: asset.contentType,
+              deletedAfterAnalysis: true,
+            },
+            scoringNotice: 'Experimental vLLM path. Scores remain heuristic creative-quality assessments, not outcome predictions.',
+            requestId,
+          },
+        });
+      } finally {
+        await deleteVideoAsset(assetId);
+      }
     }
 
     if (method === 'POST' && path === '/v1/analyze') {

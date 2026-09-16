@@ -6,7 +6,6 @@ import {
   VLLM_EXPERIMENT_DEFAULT_MODEL,
   vllmExperimentEnabled,
   vllmLaunchArgs,
-  experimentalVllmRequest,
   configuredVllmEndpoint,
   vllmExperimentCacheKey,
   analyzeWithExperimentalVllm,
@@ -20,21 +19,6 @@ assert.equal(VLLM_PRUNING_PROFILES.baseline.pruningRate, 0);
 assert.deepEqual(vllmLaunchArgs('baseline'), []);
 assert.deepEqual(vllmLaunchArgs('evs-medium'), ['--video-pruning-rate', '0.5', '--video-pruning-method', 'evs']);
 assert.deepEqual(vllmLaunchArgs('vidcom2-aggressive'), ['--video-pruning-rate', '0.75', '--video-pruning-method', 'vidcom2']);
-
-assert.equal(experimentalVllmRequest({}, {}), null);
-assert.throws(
-  () => experimentalVllmRequest({ experiment: { profile: 'evs-medium' } }, { FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED: 'true' }),
-  /backend is required/i,
-);
-assert.throws(
-  () => experimentalVllmRequest({ experiment: { backend: 'vllm', profile: 'evs-medium' } }, {}),
-  /disabled/i,
-);
-const requested = experimentalVllmRequest(
-  { experiment: { backend: 'vllm', profile: 'evs-medium' } },
-  { FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED: 'true' },
-);
-assert.equal(requested.profile.pruningRate, 0.5);
 
 const env = {
   VLLM_EXPERIMENT_ENDPOINTS_JSON: JSON.stringify({

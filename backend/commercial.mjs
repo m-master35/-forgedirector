@@ -31,12 +31,8 @@ import {
   assertAssetId,
 } from './video-intelligence.mjs';
 import {
-  vllmExperimentEnabled,
-  runVllmPruningExperiment,
-} from './vllm-experiment.mjs';
-import {
   VLLM_EXPERIMENT_CACHE_VERSION,
-  experimentalVllmRequest,
+  vllmExperimentEnabled,
   configuredVllmEndpoint,
   vllmExperimentCacheKey,
   analyzeWithExperimentalVllm,
@@ -1820,43 +1816,44 @@ export const handler = async (event) => {
 
     if (method === 'POST' && path === '/v1/experimental/analyze-vllm') {
       if (!vllmExperimentEnabled()) {
-        const error = new Error('The vLLM pruning experiment is disabled.');
+        const error = new Error('The vLLM video-analysis experiment is disabled.');
         error.statusCode = 404;
         throw error;
       }
 
       const assetId = assertAssetId(assertText(payload?.assetId, 'assetId', 100));
-      const request = {
-        profile: assertText(payload?.profile, 'profile', 100),
-        platform: assertPlatform(payload?.platform),
-        objective: assertObjective(payload?.objective),
-        audience: assertText(payload?.audience, 'audience', 1000, false),
-        context: assertText(payload?.context, 'context', 3000, false),
-        transcript: assertText(payload?.transcript, 'transcript', 12000, false),
-        declaredDurationSeconds: assertDeclaredDuration(payload?.durationSeconds),
-        requirements: assertRequirements(payload?.requirements),
-      };
-
+      const profileName = assertText(payload?.profile, 'profile', 100);
       try {
         const asset = await resolveVideoAsset(assetId);
-        const videoUrl = await createPrivateVideoReadUrl(assetId);
-        const result = await runVllmPruningExperiment({ asset, videoUrl, request });
+        const result = await invokeExperimentalVllmAnalysis({
+          asset,
+          payload,
+          experiment: { profileName },
+        });
         return response(200, {
           analysis: result.analysis,
           meta: {
             operation: 'experimental-analyze-vllm',
             experimental: true,
+            analysisBackend: 'vllm',
+            experiment: result.experiment,
+            performance: result.performance,
             modelId: result.modelId,
-            profile: result.profile,
-            experimentVersion: result.experimentVersion,
-            usage: result.usage,
-            calls: result.calls,
+            platform: result.platform,
+            objective: result.objective,
+            requirementsApplied: Object.keys(result.requirements || {}).length > 0,
             analysisRetryUsed: result.retryUsed,
             coverageRetryUsed: result.coverageRetryUsed,
+            fallbackModelUsed: false,
             complianceVerificationUsed: result.complianceVerificationUsed,
             complianceVerificationRetryUsed: result.complianceVerificationRetryUsed,
+            complianceVerificationModelId: result.complianceVerificationModelId,
+            complianceVerificationModelIds: result.complianceVerificationModelIds,
+            complianceVerificationUsage: result.complianceVerificationUsage,
             complianceVerificationCoverage: result.complianceVerificationCoverage,
             complianceVerificationAgreement: result.complianceVerificationAgreement,
+            complianceVerificationConsensusUsed: result.complianceVerificationConsensusUsed,
+            complianceVerificationDiagnostics: result.complianceVerificationDiagnostics,
             analysisCacheHit: result.analysisCacheHit === true,
             analysisCacheAgeSeconds: result.analysisCacheAgeSeconds ?? null,
             analysisCacheVersion: result.analysisCacheVersion || null,
@@ -1866,7 +1863,8 @@ export const handler = async (event) => {
               contentType: asset.contentType,
               deletedAfterAnalysis: true,
             },
-            scoringNotice: 'Experimental vLLM path. Scores remain heuristic creative-quality assessments, not outcome predictions.',
+            usage: result.usage,
+            scoringNotice: 'Experimental vLLM path. Scores are heuristic creative-quality assessments, not predictions of views, sales, retention, ROAS, or virality.',
             requestId,
           },
         });
@@ -1879,17 +1877,11 @@ export const handler = async (event) => {
       const assetId = assertAssetId(assertText(payload?.assetId, 'assetId', 100));
       try {
         const asset = await resolveVideoAsset(assetId);
-        const experiment = experimentalVllmRequest(payload);
-        const result = experiment
-          ? await invokeExperimentalVllmAnalysis({ asset, payload, experiment })
-          : await invokeVideoAnalysis({ asset, payload });
+        const result = await invokeVideoAnalysis({ asset, payload });
         return response(200, {
           analysis: result.analysis,
           meta: {
             operation: 'analyze',
-            analysisBackend: result.analysisBackend || 'bedrock',
-            experiment: result.experiment || null,
-            performance: result.performance || null,
             modelId: result.modelId,
             platform: result.platform,
             objective: result.objective,

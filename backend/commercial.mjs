@@ -11,6 +11,7 @@ import {
 import { evaluateCampaign } from './qa.mjs';
 import {
   createVideoUpload,
+  createVideoReadUrl,
   deleteVideoAsset,
   resolveVideoAsset,
   readAnalysisCache,
@@ -29,6 +30,13 @@ import {
   isAuthoritativeVerifierCoverage,
   assertAssetId,
 } from './video-intelligence.mjs';
+import {
+  VLLM_EXPERIMENT_CACHE_VERSION,
+  experimentalVllmRequest,
+  configuredVllmEndpoint,
+  vllmExperimentCacheKey,
+  analyzeWithExperimentalVllm,
+} from './experimental-vllm.mjs';
 import {
   prepareCreativeRequest,
   parseDirectorJson,
@@ -1635,6 +1643,92 @@ async function invokeVideoAnalysis({ asset, payload }) {
   return analysisResult;
 }
 
+
+async function invokeExperimentalVllmAnalysis({ asset, payload, experiment }) {
+  const endpoint = configuredVllmEndpoint(experiment.profileName);
+
+  // Reuse the production request validators before an experimental request can
+  // reach another runtime. The experiment changes inference, not the public
+  // input contract.
+  const platform = assertPlatform(payload?.platform);
+  const objective = assertObjective(payload?.objective);
+  const audience = assertText(payload?.audience, 'audience', 1000, false);
+  const context = assertText(payload?.context, 'context', 3000, false);
+  const transcript = assertText(payload?.transcript, 'transcript', 12000, false);
+  const declaredDurationSeconds = assertDeclaredDuration(payload?.durationSeconds);
+  const requirements = assertRequirements(payload?.requirements);
+
+  const normalizedRequest = {
+    platform,
+    objective,
+    audience,
+    context,
+    transcript,
+    declaredDurationSeconds,
+    requirements,
+  };
+  const cacheKey = vllmExperimentCacheKey({
+    asset,
+    request: normalizedRequest,
+    endpoint,
+  });
+
+  if (cacheKey) {
+    const cached = await readAnalysisCache(cacheKey);
+    if (cached?.value?.analysis) {
+      return {
+        ...cached.value,
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        complianceVerificationUsage: cached.value.complianceVerificationUsage
+          ? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+          : null,
+        performance: {
+          modelCalls: 0,
+          modelCallLatenciesMs: [],
+          totalModelLatencyMs: 0,
+          cachedFreshPerformance: cached.value.performance || null,
+        },
+        analysisCacheHit: true,
+        analysisCacheAgeSeconds: cached.ageSeconds,
+        analysisCacheVersion: VLLM_EXPERIMENT_CACHE_VERSION,
+      };
+    }
+  }
+
+  // vLLM may fetch the video separately for primary analysis and blind
+  // verification, so use the existing maximum upload-ticket lifetime rather
+  // than a single-request-sized URL.
+  const videoUrl = await createVideoReadUrl(asset.assetId, 900);
+  const result = await analyzeWithExperimentalVllm({
+    payload: {
+      platform,
+      objective,
+      audience,
+      context,
+      transcript,
+      durationSeconds: declaredDurationSeconds,
+      requirements,
+    },
+    videoUrl,
+    endpoint,
+  });
+
+  const experimentalResult = {
+    ...result,
+    platform,
+    objective,
+    requirements,
+    modelId: endpoint.model,
+    analysisBackend: 'vllm',
+    analysisCacheHit: false,
+    analysisCacheAgeSeconds: 0,
+    analysisCacheVersion: VLLM_EXPERIMENT_CACHE_VERSION,
+  };
+
+  if (cacheKey) await writeAnalysisCache(cacheKey, experimentalResult);
+  return experimentalResult;
+}
+
 function planMessage(request) {
   const constraints = Object.keys(request?.constraints || {}).length
     ? `\n\nNORMALIZED USER CONSTRAINTS:\n${JSON.stringify(request.constraints)}`
@@ -1724,11 +1818,17 @@ export const handler = async (event) => {
       const assetId = assertAssetId(assertText(payload?.assetId, 'assetId', 100));
       try {
         const asset = await resolveVideoAsset(assetId);
-        const result = await invokeVideoAnalysis({ asset, payload });
+        const experiment = experimentalVllmRequest(payload);
+        const result = experiment
+          ? await invokeExperimentalVllmAnalysis({ asset, payload, experiment })
+          : await invokeVideoAnalysis({ asset, payload });
         return response(200, {
           analysis: result.analysis,
           meta: {
             operation: 'analyze',
+            analysisBackend: result.analysisBackend || 'bedrock',
+            experiment: result.experiment || null,
+            performance: result.performance || null,
             modelId: result.modelId,
             platform: result.platform,
             objective: result.objective,

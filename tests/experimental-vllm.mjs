@@ -15,6 +15,10 @@ assert.deepEqual(vllmLaunchArgs('vidcom2-aggressive'), ['--video-pruning-rate', 
 
 assert.equal(experimentalVllmRequest({}, {}), null);
 assert.throws(
+  () => experimentalVllmRequest({ experiment: { profile: 'evs-medium' } }, { FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED: 'true' }),
+  /backend is required/i,
+);
+assert.throws(
   () => experimentalVllmRequest({ experiment: { backend: 'vllm', profile: 'evs-medium' } }, {}),
   /disabled/i,
 );

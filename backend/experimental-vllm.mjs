@@ -25,7 +25,10 @@ export function vllmLaunchArgs(name) {
 
 export function experimentalVllmRequest(payload = {}, env = process.env) {
   const x = payload?.experiment;
-  if (!x?.backend) return null;
+  if (x == null) return null;
+  if (!x || typeof x !== 'object' || Array.isArray(x) || !x.backend) {
+    throw Object.assign(new Error('experiment.backend is required when an experiment block is supplied.'), { statusCode: 400 });
+  }
   if (String(x.backend).toLowerCase() !== 'vllm') throw Object.assign(new Error('Unsupported video analysis experiment backend.'), { statusCode: 400 });
   if (String(env.FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED || '').toLowerCase() !== 'true') throw Object.assign(new Error('The vLLM video-analysis experiment is disabled.'), { statusCode: 403 });
   const profileName = String(x.profile || '').trim();

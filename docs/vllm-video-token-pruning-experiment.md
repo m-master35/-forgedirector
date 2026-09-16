@@ -195,6 +195,8 @@ For every **fresh** case/profile record:
 - quality-gate action;
 - end-to-end and model-call latency;
 - input/prompt and output tokens reported by vLLM;
+- `vllm:request_prefill_kv_computed_tokens` to measure newly computed prefill KV tokens where exposed;
+- `vllm:request_prefill_time_seconds`, TTFT and inference/e2e timing deltas where exposed;
 - `vllm:kv_cache_usage_perc` before/peak/after where measurable;
 - prompt-token and generation-token counter deltas where measurable;
 - GPU memory peak from `nvidia-smi` when the runner is colocated with the server;

@@ -26,11 +26,15 @@ jobs:
         run: |
           node --check backend/targeted-escalation.mjs
           node --check backend/targeted-escalation-media.mjs
+          node --check backend/targeted-escalation-pro.mjs
           node --check tests/targeted-escalation.mjs
           node --check tests/targeted-escalation-media.mjs
+          node --check tests/targeted-escalation-pro.mjs
 
       - name: Run routing, interval, cache and spend tests
-        run: node tests/targeted-escalation.mjs
+        run: |
+          node tests/targeted-escalation.mjs
+          node tests/targeted-escalation-pro.mjs
 
       - name: Install ffmpeg for isolated media tests
         run: |

@@ -1,84 +1,112 @@
 # Native vLLM video-token pruning experiment
 
-Status: isolated experiment. The production ForgeDirector `/v1/analyze` path remains Bedrock/Nova by default.
+Status: **isolated experiment**. Production ForgeDirector `POST /v1/analyze` remains on the existing Bedrock/Nova path. Nothing in this experiment deploys, changes provider credentials, changes billing, or promotes a vLLM path to production.
 
 ## Question
 
-Can ForgeDirector reduce multimodal video-analysis cost, prefill latency, and KV-cache pressure with vLLM-native video-token pruning without materially reducing defect/compliance detection?
+Can ForgeDirector reduce multimodal video-analysis prefill work, KV-cache pressure, latency and estimated inference cost with vLLM-native video-token pruning **without materially reducing defect/compliance detection**?
 
-The experiment deliberately excludes FOCUS, TimePLE, Vista-LLM, MMTok, PriorTR, AVIOT, OmniAgent, frame pre-selection, and other pruning/sampling systems. Only vLLM-native post-vision-encoder token pruning is in scope.
+The experiment deliberately excludes FOCUS, TimePLE, Vista-LLM, MMTok, PriorTR, AVIOT, OmniAgent, frame pre-selection and other sampling/pruning systems. Only vLLM-native post-vision-encoder video-token pruning is in scope.
 
 ## Verified vLLM capability
 
-Verified against current vLLM documentation and source on 2026-09-16:
+Verified against vLLM documentation and source on 2026-09-16:
 
-- `--video-pruning-rate q` accepts a pruning fraction in `[0, 1)`; pruning is enabled when `q > 0`.
-- `--video-pruning-method evs` is the default native method for models implementing multimodal pruning.
-- `--video-pruning-method vidcom2` is supported by Qwen3-VL; unsupported model/method combinations are rejected at startup.
-- pruning happens after the vision encoder, so the expected wins are language-model prefill work and KV-cache use rather than vision-encoder FLOPs.
-- enabling pruning disables encoder CUDA graphs because the retained-token count is data-dependent.
-- vLLM exposes Prometheus metrics including `vllm:kv_cache_usage_perc`, prompt-token counters/histograms, TTFT, request latency, and throughput-related counters.
+- vLLM 0.29.0 exposes `--video-pruning-rate q`, with `q` constrained to `[0, 1)`.
+- `--video-pruning-method evs` selects Efficient Video Sampling (EVS).
+- `--video-pruning-method vidcom2` selects Video Compression Commander (VidCom2).
+- EVS is the default pruning method for models implementing multimodal pruning.
+- Qwen3-VL declares native support for both `evs` and `vidcom2`; vLLM rejects unsupported model/method combinations at startup.
+- pruning is applied after the vision encoder, so the primary expected savings are language-model prefill/KV work rather than the vision encoder's own FLOPs.
+- vLLM's documentation notes that enabling video pruning disables multimodal encoder CUDA graphs because retained token counts become data-dependent.
+- the OpenAI-compatible server accepts video through `video_url`.
+- the Prometheus endpoint exposes metrics including `vllm:kv_cache_usage_perc`, prompt-token counters, generation-token counters and request-latency metrics.
 
-Pinned first validation target: **vLLM 0.28.0 + Qwen/Qwen3-VL-4B-Instruct**. v0.28.0 contains the Qwen3-VL device placement fix required by the pruning path and includes native VidCom2 support. Do not silently substitute another vLLM build in benchmark evidence: record exact version/commit and model revision.
+Pinned first validation target: **vLLM 0.29.0 + Qwen/Qwen3-VL-8B-Instruct**. Do not silently substitute another vLLM build or model revision in benchmark evidence. Record the exact vLLM version, model ID and model revision used for every controlled run.
 
-Known upstream caution: recent vLLM releases have had pruning regressions in Qwen-family multimodal models. Every benchmark server must pass a one-video pruning smoke test before the corpus run. An upstream crash is an experiment failure, not a reason to patch production ForgeDirector.
+The same-model no-prune vLLM control is the causal baseline for pruning. Current production Nova remains a reference capability/cost benchmark, but it is not the pruning control because changing both runtime/model and pruning would confound the result.
 
 ## Profiles
 
-The experiment has one no-prune control and two method families:
-
 | Profile | Method | Fraction pruned | Purpose |
 | --- | --- | ---: | --- |
-| `baseline` | EVS configured but inactive | 0% | same-model vLLM control |
+| `baseline` | pruning disabled | 0% | same-model vLLM control |
 | `evs-conservative` | EVS | 25% | low-risk pruning |
 | `evs-medium` | EVS | 50% | balanced pruning |
-| `evs-aggressive` | EVS | 75% | high pruning; vLLM docs use 75% in their example |
+| `evs-aggressive` | EVS | 75% | aggressive pruning |
 | `vidcom2-conservative` | VidCom2 | 25% | low-risk Qwen3-VL-only pruning |
 | `vidcom2-medium` | VidCom2 | 50% | balanced Qwen3-VL-only pruning |
 | `vidcom2-aggressive` | VidCom2 | 75% | aggressive Qwen3-VL-only pruning |
 
-The causal pruning comparison is **vLLM baseline vs the pruned vLLM profiles using the same model, revision, decoding settings, video, prompt, and ForgeDirector normalization/gates**. Current production Bedrock/Nova remains a reference benchmark, but it is not the pruning control because changing both model/runtime and pruning would confound the result.
+The rates are ordinary values accepted by vLLM's `[0,1)` configuration. The 75% profile is also the rate used in vLLM's public VidCom2 example. No unsupported per-request pruning knobs are invented.
 
-## Isolation and request contract
+## Isolation
 
-No production behavior changes unless both are true:
+vLLM pruning is a **server/model configuration**, not a request-time setting. Each benchmark profile must therefore point at a server started with the matching pruning flags, or the same server must be restarted sequentially between profiles.
 
-1. `FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED=true` is present in that environment; and
-2. the analyze payload contains an internal-only block such as:
+ForgeDirector exposes one internal experiment-only route:
+
+`POST /v1/experimental/analyze-vllm`
+
+It is reachable only when:
+
+`FORGEDIRECTOR_VLLM_EXPERIMENT_ENABLED=true`
+
+The request uses the normal analysis fields plus an explicit profile:
 
 ```json
 {
-  "experiment": {
-    "backend": "vllm",
-    "profile": "evs-medium"
+  "assetId": "uploaded-asset-uuid",
+  "profile": "evs-medium",
+  "platform": "General",
+  "objective": "awareness",
+  "durationSeconds": 12,
+  "requirements": {
+    "mustShow": ["motorcycle"],
+    "mustNotShow": ["wine bottle"]
   }
 }
 ```
 
-If an experiment is requested while the feature flag is off, the API fails closed instead of silently returning a Bedrock result and corrupting benchmark evidence.
+The production `POST /v1/analyze` route does **not** inspect an experiment field and does not switch to vLLM. This experiment route is intentionally absent from the public RapidAPI/OpenAPI contract.
 
-Each profile maps to a separately configured vLLM endpoint via `VLLM_EXPERIMENT_ENDPOINTS_JSON`. vLLM pruning is a server/model setting, not a per-request setting, so the endpoint declaration must state the exact `model`, `vllmVersion`, `pruningRate`, and `pruningMethod`. ForgeDirector rejects mismatches. Example:
+Each profile maps to a separately declared vLLM endpoint through `VLLM_EXPERIMENT_ENDPOINTS_JSON`. The declaration must attest the model, vLLM version, pruning method and pruning rate; ForgeDirector fails closed when the declaration conflicts with the profile.
+
+Example:
 
 ```json
 {
   "baseline": {
     "baseUrl": "http://127.0.0.1:8100",
-    "model": "Qwen/Qwen3-VL-4B-Instruct",
-    "vllmVersion": "0.28.0",
+    "model": "Qwen/Qwen3-VL-8B-Instruct",
+    "vllmVersion": "0.29.0",
     "pruningRate": 0,
     "pruningMethod": "evs"
   },
   "evs-medium": {
     "baseUrl": "http://127.0.0.1:8150",
-    "model": "Qwen/Qwen3-VL-4B-Instruct",
-    "vllmVersion": "0.28.0",
+    "model": "Qwen/Qwen3-VL-8B-Instruct",
+    "vllmVersion": "0.29.0",
     "pruningRate": 0.5,
     "pruningMethod": "evs"
   }
 }
 ```
 
-The experimental adapter uses vLLM's OpenAI-compatible `video_url` chat input. ForgeDirector creates a short-lived signed GET URL for its private S3 object only after the experiment path is selected.
+An endpoint declaration is an experiment configuration assertion, not cryptographic proof of server flags. The controlled benchmark must also preserve the exact server launch command/log for each profile.
+
+## Private video handling
+
+The production asset remains private in S3. Only after the experiment route is selected does ForgeDirector create a short-lived signed GET URL and pass that URL to the configured vLLM server as `video_url`.
+
+For any remotely reachable vLLM server:
+
+- restrict `--allowed-media-domains` to the required S3 media host(s);
+- set `VLLM_MEDIA_URL_ALLOW_REDIRECTS=0`;
+- do not expose the vLLM server publicly without authentication/network controls;
+- never put a signed S3 URL into logs or benchmark artifacts.
+
+The direct benchmark runner can use local data URLs instead, avoiding S3/network timing when the goal is pure inference comparison.
 
 ## Cache isolation
 
@@ -86,62 +114,79 @@ Production and experimental cache entries cannot collide. The experimental cache
 
 - its own experiment cache schema version;
 - video content fingerprint, size and type;
-- normalized analysis request;
+- normalized ForgeDirector analysis request;
 - profile name;
-- model and declared vLLM version;
-- pruning method and rate.
+- model ID and declared vLLM version;
+- pruning method and pruning rate.
 
-A cached experimental repeat returns zero model usage, exactly like the existing production cache. Cache hits must never be included as fresh latency/token measurements in pruning comparisons.
+A cached experimental repeat reports zero model usage. **Cache hits are never valid fresh pruning benchmark observations.**
 
 ## QA parity
 
-The adapter deliberately reuses ForgeDirector's existing prompts and normalization/gating code:
+The experimental analyzer reuses ForgeDirector's existing:
 
-- `VIDEO_ANALYSIS_SYSTEM_PROMPT`
-- `buildVideoAnalysisPrompt`
-- `normalizeVideoAnalysis`
-- full-duration coverage gate
-- `VIDEO_COMPLIANCE_SYSTEM_PROMPT`
-- `buildVideoCompliancePrompt`
-- `normalizeVideoCompliance`
-- two-source primary + blind-verifier consensus
-- deterministic quality gate
+- `VIDEO_ANALYSIS_SYSTEM_PROMPT`;
+- `buildVideoAnalysisPrompt`;
+- `normalizeVideoAnalysis`;
+- full-duration coverage gate;
+- `VIDEO_COMPLIANCE_SYSTEM_PROMPT`;
+- `buildVideoCompliancePrompt`;
+- `normalizeVideoCompliance`;
+- primary + blind-verifier consensus;
+- deterministic quality gate.
 
-This is required so pruning is the intended independent variable. The existing 29-video labeled corpus remains the main quality corpus; the six-video repeatability corpus remains useful for repeated/stability checks.
+This keeps the requested QA criteria fixed while the vLLM profile changes.
 
-## Benchmark measurements
+The existing 29-video labeled corpus remains the main quality corpus. The six-video repeatability corpus remains useful for a later repeated/stability pass.
 
-For every fresh case/profile record at minimum:
+## Benchmark workflow
+
+1. Build the existing corpus without provider calls:
+
+   `FORGEDIRECTOR_CORPUS_ONLY=1 tests/run-live-video-benchmark.sh benchmark-results`
+
+2. Start one pinned vLLM profile with `experiments/vllm-pruning/launch-profile.sh`, or provision separately attested endpoints.
+3. Run `experiments/vllm-pruning/run-benchmark.mjs` once per profile.
+4. Keep the no-prune `baseline.json`.
+5. Run `experiments/vllm-pruning/grade-benchmarks.mjs` over all profile reports.
+6. Only after vLLM profiles are understood, optionally compare against a separately approved fresh production/Nova benchmark. Do not spend Bedrock inference merely to make the vLLM experiment run.
+
+## Measurements
+
+For every **fresh** case/profile record:
 
 - labeled requirement checks correct / incorrect;
-- false negatives (expected defect/fail not detected);
-- false positives (expected pass reported fail);
+- false negatives: expected defect/fail not detected;
+- false positives: expected pass reported fail;
 - no-speech hallucination status;
 - full-duration coverage status;
 - quality-gate action;
 - end-to-end and model-call latency;
-- prompt/input and output tokens reported by vLLM;
+- input/prompt and output tokens reported by vLLM;
 - `vllm:kv_cache_usage_perc` before/peak/after where measurable;
-- prompt-token and generation-token counter deltas;
-- TTFT / request-latency metrics where measurable;
-- GPU memory peak from NVML when the runner exposes it;
+- prompt-token and generation-token counter deltas where measurable;
+- GPU memory peak from `nvidia-smi` when the runner is colocated with the server;
 - throughput under the same concurrency schedule;
-- estimated inference cost using the actual GPU hourly price and measured wall/GPU time;
-- compliance timestamps and their absolute delta from the no-prune control when comparable.
+- estimated inference cost when the actual GPU hourly price is supplied;
+- compliance timestamp drift versus same-model no-prune baseline where comparable.
 
-Vision-token count should be reported separately only when directly measurable from the runtime. Do not rename total prompt tokens as "video tokens".
+Direct video-token count is reported only if the runtime exposes it directly. Total prompt tokens must not be relabeled as "video tokens".
 
 ## Decision gate
 
 A pruned profile can advance to a larger controlled validation only if all are true:
 
 1. no material reduction in labeled defect/compliance detection versus same-model no-prune vLLM;
-2. no unacceptable increase in false negatives, especially must-not-show, required-text, CTA, or continuity failures;
-3. full-duration coverage remains at release-gate quality;
+2. no new release-critical false negatives;
+3. full-duration coverage and no-speech safeguards remain clean;
 4. compute/token/KV/latency improvement is meaningful on fresh requests;
 5. operational complexity remains reasonable;
-6. the result is not dependent on an upstream patch or unpinned local vLLM modification.
+6. the result does not depend on an unpinned local vLLM patch.
 
-For the first corpus pass, any new false negative on a release-critical labeled defect is a rejection signal for that profile. A 70% compute saving does not offset missing a production defect.
+For the first corpus pass, **any new false negative on a labeled defect is a rejection signal** for that profile. Large compute savings do not compensate for missing a production defect.
 
-No experiment result promotes itself to production. Production enablement requires a separate reviewed change after a larger controlled validation.
+The automated grader never promotes a profile to production. An eligible profile only earns a larger controlled validation. Production enablement requires a separate reviewed change.
+
+## Spend boundary
+
+No paid Bedrock/Nova inference or paid GPU provisioning is authorized by this experiment branch. Corpus generation and static/unit validation are free/offline. A controlled GPU benchmark requires an available GPU endpoint; if provisioning would incur cost, obtain explicit approval first.

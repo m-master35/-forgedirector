@@ -1,0 +1,166 @@
+{
+  "schemaVersion": "fd-focus-corpus-1",
+  "candidateFrameRateFps": 1,
+  "cases": [
+    {
+      "id": "black-middle",
+      "file": "black-middle.mp4",
+      "source": "controlled",
+      "defectCategory": "black_blank_frame",
+      "question": "Does the video contain a black or blank visual interval?",
+      "expected": true,
+      "defectWindowsSeconds": [[14, 15]],
+      "coverageRequired": true
+    },
+    {
+      "id": "no-black",
+      "file": "no-black.mp4",
+      "source": "controlled",
+      "defectCategory": "black_blank_frame",
+      "question": "Does the video contain a black or blank visual interval?",
+      "expected": false,
+      "defectWindowsSeconds": [],
+      "coverageRequired": true
+    },
+    {
+      "id": "forbidden-brief",
+      "file": "forbidden-brief.mp4",
+      "source": "controlled",
+      "defectCategory": "forbidden_object",
+      "question": "Is the visible word RIVAL present anywhere in the video?",
+      "expected": true,
+      "defectWindowsSeconds": [[17, 18.5]],
+      "coverageRequired": true
+    },
+    {
+      "id": "forbidden-absent",
+      "file": "forbidden-absent.mp4",
+      "source": "controlled",
+      "defectCategory": "forbidden_object",
+      "question": "Is the visible word RIVAL present anywhere in the video?",
+      "expected": false,
+      "defectWindowsSeconds": [],
+      "coverageRequired": true
+    },
+    {
+      "id": "required-text-late",
+      "file": "required-text-late.mp4",
+      "source": "controlled",
+      "defectCategory": "required_text",
+      "question": "Is the visible text START FREE present anywhere in the video?",
+      "expected": true,
+      "defectWindowsSeconds": [[27, 29.5]],
+      "coverageRequired": true
+    },
+    {
+      "id": "required-text-missing",
+      "file": "required-text-missing.mp4",
+      "source": "controlled",
+      "defectCategory": "required_text",
+      "question": "Is the visible text START FREE present anywhere in the video?",
+      "expected": false,
+      "defectWindowsSeconds": [],
+      "coverageRequired": true
+    },
+    {
+      "id": "continuity-break",
+      "file": "continuity-break.mp4",
+      "source": "controlled",
+      "defectCategory": "object_continuity",
+      "question": "Does the lead character representation change shirt color from blue to red during the video?",
+      "expected": true,
+      "defectWindowsSeconds": [[14.5, 16]],
+      "coverageRequired": true
+    },
+    {
+      "id": "continuity-stable",
+      "file": "continuity-stable.mp4",
+      "source": "controlled",
+      "defectCategory": "object_continuity",
+      "question": "Does the lead character representation change shirt color from blue to red during the video?",
+      "expected": false,
+      "defectWindowsSeconds": [],
+      "coverageRequired": true
+    },
+    {
+      "id": "product-change",
+      "file": "product-change.mp4",
+      "source": "controlled",
+      "defectCategory": "product_logo_consistency",
+      "question": "Does the product box visibly change from green to orange during the video?",
+      "expected": true,
+      "defectWindowsSeconds": [[14.5, 16]],
+      "coverageRequired": true
+    },
+    {
+      "id": "product-stable",
+      "file": "product-stable.mp4",
+      "source": "controlled",
+      "defectCategory": "product_logo_consistency",
+      "question": "Does the product box visibly change from green to orange during the video?",
+      "expected": false,
+      "defectWindowsSeconds": [],
+      "coverageRequired": true
+    },
+    {
+      "id": "transition-glitch",
+      "file": "transition-glitch.mp4",
+      "source": "controlled",
+      "defectCategory": "scene_transition",
+      "question": "Does a brief bright magenta full-screen transition or visual glitch appear?",
+      "expected": true,
+      "defectWindowsSeconds": [[20, 21]],
+      "coverageRequired": true
+    },
+    {
+      "id": "transition-clean",
+      "file": "transition-clean.mp4",
+      "source": "controlled",
+      "defectCategory": "scene_transition",
+      "question": "Does a brief bright magenta full-screen transition or visual glitch appear?",
+      "expected": false,
+      "defectWindowsSeconds": [],
+      "coverageRequired": true
+    },
+    {
+      "id": "real-motorcycle-present",
+      "file": "real-motorcycle.mp4",
+      "source": "public-real-generated",
+      "defectCategory": "required_object",
+      "question": "Is a motorcycle visibly present in the video?",
+      "expected": true,
+      "defectWindowsSeconds": null,
+      "coverageRequired": false
+    },
+    {
+      "id": "real-motorcycle-wine-absent",
+      "file": "real-motorcycle.mp4",
+      "source": "public-real-generated",
+      "defectCategory": "forbidden_object",
+      "question": "Is a wine bottle visibly present in the video?",
+      "expected": false,
+      "defectWindowsSeconds": null,
+      "coverageRequired": true
+    },
+    {
+      "id": "real-wine-present",
+      "file": "real-wine.mp4",
+      "source": "public-real-generated",
+      "defectCategory": "required_object",
+      "question": "Is a wine bottle visibly present in the video?",
+      "expected": true,
+      "defectWindowsSeconds": null,
+      "coverageRequired": false
+    },
+    {
+      "id": "real-wine-motorcycle-absent",
+      "file": "real-wine.mp4",
+      "source": "public-real-generated",
+      "defectCategory": "forbidden_object",
+      "question": "Is a motorcycle visibly present in the video?",
+      "expected": false,
+      "defectWindowsSeconds": null,
+      "coverageRequired": true
+    }
+  ]
+}

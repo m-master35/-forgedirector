@@ -277,6 +277,11 @@ for (const expected of expectations.cases || []) {
         promptTokensCounterDelta: metricDeltaAny(before, after, ['vllm:prompt_tokens_total', 'vllm:prompt_tokens']),
         generationTokensCounterDelta: metricDeltaAny(before, after, ['vllm:generation_tokens_total', 'vllm:generation_tokens']),
         requestSuccessCounterDelta: metricDeltaAny(before, after, ['vllm:request_success_total', 'vllm:request_success']),
+        prefillKvComputedTokensDelta: metricDeltaAny(before, after, ['vllm:request_prefill_kv_computed_tokens_sum']),
+        prefillTimeSecondsDelta: metricDeltaAny(before, after, ['vllm:request_prefill_time_seconds_sum']),
+        timeToFirstTokenSecondsDelta: metricDeltaAny(before, after, ['vllm:time_to_first_token_seconds_sum']),
+        inferenceTimeSecondsDelta: metricDeltaAny(before, after, ['vllm:request_inference_time_seconds_sum']),
+        e2eLatencySecondsDelta: metricDeltaAny(before, after, ['vllm:e2e_request_latency_seconds_sum']),
         kvCacheUsageBefore: Number.isFinite(Number(before?.['vllm:kv_cache_usage_perc'])) ? Number(before['vllm:kv_cache_usage_perc']) : null,
         kvCacheUsagePeak: observed.peakKv,
         kvCacheUsageAfter: Number.isFinite(Number(after?.['vllm:kv_cache_usage_perc'])) ? Number(after['vllm:kv_cache_usage_perc']) : null,
@@ -304,6 +309,9 @@ const totalInputTokens = successful.reduce((sum, row) => sum + Number(row.usage?
 const totalOutputTokens = successful.reduce((sum, row) => sum + Number(row.usage?.outputTokens || 0), 0);
 const peakKvValues = successful.map((row) => row.metrics?.kvCacheUsagePeak).filter(Number.isFinite);
 const peakGpuValues = successful.map((row) => row.metrics?.gpuMemoryPeakMiB).filter(Number.isFinite);
+const prefillKvValues = successful.map((row) => row.metrics?.prefillKvComputedTokensDelta).filter(Number.isFinite);
+const prefillTimeValues = successful.map((row) => row.metrics?.prefillTimeSecondsDelta).filter(Number.isFinite);
+const ttftValues = successful.map((row) => row.metrics?.timeToFirstTokenSecondsDelta).filter(Number.isFinite);
 const totalCost = successful.map((row) => row.estimatedInferenceCostUsd).filter(Number.isFinite).reduce((a, b) => a + b, 0);
 
 const report = {
@@ -335,6 +343,9 @@ const report = {
     totalInputTokens,
     totalOutputTokens,
     totalWallMs: Math.round(totalWallMs * 100) / 100,
+    totalPrefillKvComputedTokens: prefillKvValues.length ? prefillKvValues.reduce((a, b) => a + b, 0) : null,
+    totalPrefillTimeSeconds: prefillTimeValues.length ? Math.round(prefillTimeValues.reduce((a, b) => a + b, 0) * 1000) / 1000 : null,
+    totalTimeToFirstTokenSeconds: ttftValues.length ? Math.round(ttftValues.reduce((a, b) => a + b, 0) * 1000) / 1000 : null,
     sequentialThroughputCasesPerSecond: totalWallMs > 0 ? Math.round((successful.length / (totalWallMs / 1000)) * 10000) / 10000 : null,
     peakKvCacheUsagePerc: peakKvValues.length ? Math.max(...peakKvValues) : null,
     peakGpuMemoryMiB: peakGpuValues.length ? Math.max(...peakGpuValues) : null,

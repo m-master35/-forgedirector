@@ -1,0 +1,121 @@
+name: Benchmark FOCUS Frame Selection
+
+# Manual-only paid shadow benchmark. This workflow never deploys ForgeDirector.
+on:
+  workflow_dispatch:
+    inputs:
+      case_limit:
+        description: "Number of corpus cases to run (0 = all)"
+        required: false
+        default: "0"
+        type: string
+      nova_model_id:
+        description: "Nova model/inference profile for both baseline and selected-frame QA"
+        required: false
+        default: "eu.amazon.nova-2-lite-v1:0"
+        type: string
+      nova_input_1m_usd:
+        description: "Nova input USD per 1M tokens"
+        required: false
+        default: "0.30"
+        type: string
+      nova_output_1m_usd:
+        description: "Nova output USD per 1M tokens"
+        required: false
+        default: "2.50"
+        type: string
+      titan_image_usd:
+        description: "Titan multimodal embedding USD per image; verify against current pricing"
+        required: false
+        default: "0.00006"
+        type: string
+      titan_text_1k_usd:
+        description: "Titan multimodal embedding USD per 1K text tokens; verify against current pricing"
+        required: false
+        default: "0.00080"
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: forgedirector-focus-frame-selection-benchmark
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  NOVA_MODEL_ID: ${{ inputs.nova_model_id }}
+  NOVA_INPUT_1M_USD: ${{ inputs.nova_input_1m_usd }}
+  NOVA_OUTPUT_1M_USD: ${{ inputs.nova_output_1m_usd }}
+  TITAN_IMAGE_PRICE_USD: ${{ inputs.titan_image_usd }}
+  TITAN_TEXT_1K_PRICE_USD: ${{ inputs.titan_text_1k_usd }}
+  TITAN_CONCURRENCY: "4"
+
+jobs:
+  shadow-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorFocusShadowBenchmark
+          mask-aws-account-id: true
+
+      - name: Install local video/font tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+
+      - name: Install isolated benchmark dependency
+        run: npm install --prefix experiments/focus --ignore-scripts --no-audit --no-fund
+
+      - name: Syntax-check experiment
+        run: |
+          node --check backend/frame-selection.mjs
+          node --check backend/frame-selection-policy.mjs
+          node --check experiments/focus/titan-scorer.mjs
+          node --check experiments/focus/media.mjs
+          node --check experiments/focus/vlm.mjs
+          node --check experiments/focus/run-shadow-benchmark.mjs
+          bash -n experiments/focus/build-corpus.sh
+
+      - name: Build controlled and public-video corpus
+        run: |
+          chmod +x experiments/focus/build-corpus.sh
+          experiments/focus/build-corpus.sh focus-corpus
+
+      - name: Run isolated original-vs-selected benchmark
+        run: |
+          node experiments/focus/run-shadow-benchmark.mjs             --corpus focus-corpus             --manifest experiments/focus/corpus-manifest.json             --output focus-benchmark-results             --case-limit "${{ inputs.case_limit }}"
+
+      - name: Add benchmark summary
+        if: always()
+        run: |
+          if [ -f focus-benchmark-results/summary.md ]; then
+            cat focus-benchmark-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgedirector-focus-frame-selection-benchmark
+          path: |
+            focus-benchmark-results/results.json
+            focus-benchmark-results/summary.md
+            focus-benchmark-results/work/**/*.timestamp-map.json
+            focus-corpus/*.ffprobe.json
+          if-no-files-found: warn

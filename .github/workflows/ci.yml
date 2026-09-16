@@ -58,6 +58,12 @@ jobs:
       - name: Run defect-specific frame selection policy tests
         run: node tests/frame-selection-policy.mjs
 
+      - name: Run frame budget tests
+        run: node tests/frame-selection-budget.mjs
+
+      - name: Report structural selector overhead
+        run: node experiments/focus/selector-overhead.mjs
+
       - name: Check required project files
         run: |
           test -f index.html
@@ -88,6 +94,9 @@ jobs:
           test -f tests/frame-selection.mjs
           test -f tests/frame-selection-cache.mjs
           test -f tests/frame-selection-policy.mjs
+          test -f tests/frame-selection-budget.mjs
+          test -f experiments/focus/benchmark-utils.mjs
+          test -f experiments/focus/selector-overhead.mjs
           test -f tests/director-reliability.mjs
           test -f tests/director-fuzz.mjs
 

@@ -78,6 +78,39 @@ async function readMetrics() {
   }
 }
 
+function localServerCommand() {
+  if (!localGpuSampling) return null;
+  try {
+    const text = execFileSync('pgrep', ['-af', 'vllm serve'], {
+      encoding: 'utf8',
+      timeout: 2500,
+    }).trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
+function validateLocalServerProfile(command) {
+  if (!command) return { verified: false, reason: 'local vLLM process command unavailable' };
+  const rateMatch = command.match(/--video-pruning-rate(?:=|\s+)([0-9.]+)/);
+  const methodMatch = command.match(/--video-pruning-method(?:=|\s+)(\S+)/);
+  const actualRate = rateMatch ? Number(rateMatch[1]) : 0;
+  const actualMethod = methodMatch ? String(methodMatch[1]).trim() : 'evs';
+  const expectedRate = Number(profile.pruningRate || 0);
+  const expectedMethod = String(profile.pruningMethod || 'evs');
+  if (actualRate !== expectedRate || (expectedRate > 0 && actualMethod !== expectedMethod)) {
+    throw new Error(
+      `Local vLLM process flags do not match profile ${profileName}: expected rate=${expectedRate}, method=${expectedMethod}; observed rate=${actualRate}, method=${actualMethod}.`,
+    );
+  }
+  return {
+    verified: true,
+    pruningRate: actualRate,
+    pruningMethod: actualMethod,
+  };
+}
+
 function gpuMemoryMiB() {
   if (!localGpuSampling) return null;
   try {
@@ -179,6 +212,8 @@ const modelsResponse = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal
 if (!modelsResponse.ok) throw new Error(`vLLM /v1/models failed with HTTP ${modelsResponse.status}`);
 const servedModels = await modelsResponse.json();
 const servedIds = (servedModels?.data || []).map((item) => item?.id).filter(Boolean);
+const observedServerCommand = localServerCommand();
+const localProfileVerification = validateLocalServerProfile(observedServerCommand);
 if (!servedIds.includes(model)) {
   throw new Error(`Configured model ${model} is not reported by ${baseUrl}/v1/models (${servedIds.join(', ') || 'none'})`);
 }
@@ -282,6 +317,8 @@ const report = {
     vllmVersion,
     gpuHourlyUsd: gpuHourlyUsd || null,
     warmupPerformed: !skipWarmup,
+    localServerCommand: observedServerCommand,
+    localProfileVerification,
   },
   corpus: { directory: corpusDir, cases: rows.length },
   summary: {
@@ -298,7 +335,7 @@ const report = {
     totalInputTokens,
     totalOutputTokens,
     totalWallMs: Math.round(totalWallMs * 100) / 100,
-    throughputCasesPerSecond: totalWallMs > 0 ? Math.round((successful.length / (totalWallMs / 1000)) * 10000) / 10000 : null,
+    sequentialThroughputCasesPerSecond: totalWallMs > 0 ? Math.round((successful.length / (totalWallMs / 1000)) * 10000) / 10000 : null,
     peakKvCacheUsagePerc: peakKvValues.length ? Math.max(...peakKvValues) : null,
     peakGpuMemoryMiB: peakGpuValues.length ? Math.max(...peakGpuValues) : null,
     estimatedInferenceCostUsd: gpuHourlyUsd > 0 ? Math.round(totalCost * 1e6) / 1e6 : null,

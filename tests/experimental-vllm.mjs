@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   VLLM_PRUNING_PROFILES,
@@ -70,6 +71,48 @@ assert.throws(
   }),
   /Qwen3-VL/,
 );
+
+assert.throws(
+  () => configuredVllmEndpoint('baseline', {
+    VLLM_EXPERIMENT_ENDPOINTS_JSON: JSON.stringify({
+      baseline: {
+        baseUrl: 'http://127.0.0.1:8100',
+        model: 'Qwen/Qwen3-VL-8B-Instruct',
+        vllmVersion: '0.28.0',
+        pruningRate: 0,
+        pruningMethod: 'evs',
+      },
+    }),
+  }),
+  /must attest version 0\.29\.0/i,
+);
+
+assert.throws(
+  () => configuredVllmEndpoint('baseline', {
+    VLLM_EXPERIMENT_ENDPOINTS_JSON: JSON.stringify({
+      baseline: {
+        baseUrl: 'http://127.0.0.1:8100',
+        model: 'Qwen/Qwen3-VL-8B-Instruct',
+        vllmVersion: '0.29.0',
+        pruningRate: 0.5,
+        pruningMethod: 'evs',
+      },
+    }),
+  }),
+  /pruning declaration does not match/i,
+);
+
+const commercialSource = fs.readFileSync(
+  new URL('../backend/commercial.mjs', import.meta.url),
+  'utf8',
+);
+assert.match(commercialSource, /\/v1\/experimental\/analyze-vllm/);
+const productionAnalyzeStart = commercialSource.indexOf("path === '/v1/analyze'");
+const productionQaStart = commercialSource.indexOf("path === '/v1/qa'", productionAnalyzeStart);
+assert.ok(productionAnalyzeStart > 0 && productionQaStart > productionAnalyzeStart);
+const productionAnalyzeBlock = commercialSource.slice(productionAnalyzeStart, productionQaStart);
+assert.doesNotMatch(productionAnalyzeBlock, /invokeExperimentalVllmAnalysis|experimentalVllmRequest|profileName/);
+assert.match(productionAnalyzeBlock, /invokeVideoAnalysis\(\{ asset, payload \}\)/);
 
 const asset = {
   contentFingerprint: 'abc123',

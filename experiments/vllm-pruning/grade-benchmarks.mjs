@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const dir = path.resolve(process.env.VLLM_BENCH_OUT || process.argv[2] || 'benchmark-vllm');
-const threshold = Number(process.env.VLLM_MEANINGFUL_REDUCTION || 0.10);
+const threshold = Number(process.env.VLLM_MEANINGFUL_REDUCTION || 0.15);
 const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.json') && name !== 'decision.json') : [];
 const reports = new Map();
 for (const file of files) {
@@ -118,9 +118,9 @@ const md = [
   `- Baseline quality clean: **${baselineQualityClean ? 'yes' : 'NO'}**`,
   `- Meaningful resource reduction threshold: **${percent(threshold)}**`,
   '',
-  '| Profile | Decision | False negatives | Input-token reduction | Latency reduction | Peak-KV reduction | Timestamp MAE |',
-  '|---|---|---:|---:|---:|---:|---:|',
-  ...decisions.map((item) => `| ${item.profile} | ${item.decision} | ${item.quality.falseNegatives} | ${percent(item.reductions.inputTokens)} | ${percent(item.reductions.wallLatency)} | ${percent(item.reductions.peakKvCacheUsage)} | ${Number.isFinite(item.timestampDrift.meanAbsoluteSeconds) ? `${item.timestampDrift.meanAbsoluteSeconds.toFixed(2)}s` : 'n/a'} |`),
+  '| Profile | Decision | False negatives | Input-token reduction | Latency reduction | Peak-KV reduction | GPU-memory reduction | Cost reduction | Timestamp MAE |',
+  '|---|---|---:|---:|---:|---:|---:|---:|---:|',
+  ...decisions.map((item) => `| ${item.profile} | ${item.decision} | ${item.quality.falseNegatives} | ${percent(item.reductions.inputTokens)} | ${percent(item.reductions.wallLatency)} | ${percent(item.reductions.peakKvCacheUsage)} | ${percent(item.reductions.peakGpuMemory)} | ${percent(item.reductions.estimatedCost)} | ${Number.isFinite(item.timestampDrift.meanAbsoluteSeconds) ? `${item.timestampDrift.meanAbsoluteSeconds.toFixed(2)}s` : 'n/a'} |`),
   '',
   'No result in this report authorizes production promotion.',
   '',

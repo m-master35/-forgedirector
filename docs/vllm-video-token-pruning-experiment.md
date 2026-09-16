@@ -143,13 +143,45 @@ The existing 29-video labeled corpus remains the main quality corpus. The six-vi
 
 1. Build the existing corpus without provider calls:
 
-   `FORGEDIRECTOR_CORPUS_ONLY=1 tests/run-live-video-benchmark.sh benchmark-results`
+   ```bash
+   FORGEDIRECTOR_CORPUS_ONLY=1 tests/run-live-video-benchmark.sh benchmark-results
+   ```
 
-2. Start one pinned vLLM profile with `experiments/vllm-pruning/launch-profile.sh`, or provision separately attested endpoints.
-3. Run `experiments/vllm-pruning/run-benchmark.mjs` once per profile.
-4. Keep the no-prune `baseline.json`.
-5. Run `experiments/vllm-pruning/grade-benchmarks.mjs` over all profile reports.
-6. Only after vLLM profiles are understood, optionally compare against a separately approved fresh production/Nova benchmark. Do not spend Bedrock inference merely to make the vLLM experiment run.
+2. Start one pinned vLLM profile. For decision-grade evidence, pin the model revision too:
+
+   ```bash
+   VLLM_MODEL_REVISION=<exact-hugging-face-commit> \
+   VLLM_PRUNING_PROFILE=baseline \
+   experiments/vllm-pruning/launch-profile.sh
+   ```
+
+   Repeat with `evs-conservative`, `evs-medium`, `evs-aggressive`, `vidcom2-conservative`, `vidcom2-medium`, and `vidcom2-aggressive`. Use the same GPU type, model revision, max model length, GPU-memory-utilization setting, and all other server arguments across profiles.
+
+3. Run the direct benchmark once per server/profile:
+
+   ```bash
+   VLLM_BENCH_PROFILE=baseline \
+   VLLM_MODEL=Qwen/Qwen3-VL-8B-Instruct \
+   VLLM_VERSION=0.29.0 \
+   VLLM_MODEL_REVISION=<same-exact-commit> \
+   VLLM_BASE_URL=http://127.0.0.1:8000 \
+   VLLM_GPU_HOURLY_USD=<actual-dedicated-gpu-rate-if-known> \
+   node experiments/vllm-pruning/run-benchmark.mjs
+   ```
+
+   For a local server, the runner records the matching `vllm serve` process command and refuses a rate/method mismatch. For a remote server, retain the server launch log/config alongside the benchmark artifact because `/v1/models` alone does not attest pruning flags.
+
+4. Keep the no-prune `baseline.json` and every pruned profile report in the same output directory.
+
+5. Run the decision gate:
+
+   ```bash
+   node experiments/vllm-pruning/grade-benchmarks.mjs benchmark-vllm
+   ```
+
+6. Only after the vLLM profiles are understood, optionally compare against a separately approved **fresh** production/Nova benchmark. The existing recorded ForgeDirector release benchmark is the historical QA bar; do not spend Bedrock inference merely to make the vLLM experiment run.
+
+If an upstream/runtime quality issue is suspected, a second all-profile run may use a changed runtime setting such as eager execution, but the setting must be identical for baseline and every pruning profile. Never change compilation/eager settings only for the failing pruning profile.
 
 ## Measurements
 
@@ -170,7 +202,7 @@ For every **fresh** case/profile record:
 - estimated inference cost when the actual GPU hourly price is supplied;
 - compliance timestamp drift versus same-model no-prune baseline where comparable.
 
-Direct video-token count is reported only if the runtime exposes it directly. Total prompt tokens must not be relabeled as "video tokens".
+Direct video-token count is reported only if the runtime exposes it directly. Total prompt tokens must not be relabeled as "video tokens". The first-pass throughput field is explicitly **sequential cases/second**; concurrency stress belongs in the larger controlled validation if a profile first clears the quality gate.
 
 ## Decision gate
 

@@ -33,6 +33,7 @@ jobs:
           node --check backend/qa.mjs
           node --check backend/storage.mjs
           node --check backend/video-intelligence.mjs
+          node --check backend/vllm-experiment-config.mjs
           node --check backend/vllm-experiment.mjs
           node --check backend/experimental-vllm.mjs
           node --check experiments/vllm-pruning/run-benchmark.mjs
@@ -72,6 +73,7 @@ jobs:
           test -f backend/qa.mjs
           test -f backend/storage.mjs
           test -f backend/video-intelligence.mjs
+          test -f backend/vllm-experiment-config.mjs
           test -f backend/vllm-experiment.mjs
           test -f backend/experimental-vllm.mjs
           test -f docs/friction-log.md

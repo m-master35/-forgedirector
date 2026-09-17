@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout experiment head
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Authorize one-shot preflight
         id: authorize

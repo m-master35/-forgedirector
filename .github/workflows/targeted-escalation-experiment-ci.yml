@@ -36,6 +36,7 @@ jobs:
           node --check experiments/targeted-escalation/benchmark-utils.mjs
           node --check experiments/targeted-escalation/run-offline-benchmark.mjs
           node --check experiments/targeted-escalation/run-paid-benchmark.mjs
+          node --check experiments/targeted-escalation/measure-verifier-overhead.mjs
           node --check experiments/targeted-escalation/grade-paid-results.mjs
           node --check experiments/targeted-escalation/refine-paid-grading.mjs
 

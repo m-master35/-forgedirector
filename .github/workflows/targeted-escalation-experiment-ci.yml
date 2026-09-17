@@ -27,16 +27,19 @@ jobs:
           node --check backend/targeted-escalation.mjs
           node --check backend/targeted-escalation-media.mjs
           node --check backend/targeted-escalation-pro.mjs
+          node --check backend/targeted-escalation-runtime.mjs
           node --check tests/targeted-escalation.mjs
           node --check tests/targeted-escalation-media.mjs
           node --check tests/targeted-escalation-pro.mjs
+          node --check tests/targeted-escalation-runtime.mjs
           node --check experiments/targeted-escalation/run-offline-benchmark.mjs
           node --check experiments/targeted-escalation/run-paid-benchmark.mjs
 
-      - name: Run routing, interval, cache and spend tests
+      - name: Run routing, interval, cache, spend and runtime tests
         run: |
           node tests/targeted-escalation.mjs
           node tests/targeted-escalation-pro.mjs
+          node tests/targeted-escalation-runtime.mjs
 
       - name: Install ffmpeg for isolated media tests
         run: |

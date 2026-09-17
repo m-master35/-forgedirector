@@ -19,7 +19,7 @@ env:
 
 jobs:
   proxy-benchmark:
-    if: ${{ github.event.head_commit.message == 'benchmark: RUN_LIVE_API_TARGETED_PROXY' }}
+    if: "${{ github.event.head_commit.message == 'RUN_LIVE_API_TARGETED_PROXY' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

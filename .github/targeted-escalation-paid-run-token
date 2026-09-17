@@ -1,3 +1,3 @@
 One-shot authorization token for the isolated targeted-escalation paid benchmark.
 
-Second dispatch after fixing YAML expression parsing. This file has no runtime effect. The dedicated benchmark workflow additionally requires this exact commit message and the experiment branch. Normal PR CI never performs paid inference.
+Authorized paid benchmark dispatch on 2026-09-17 after the exact experiment head passed both baseline ForgeDirector CI and targeted-escalation experiment CI. This file has no runtime effect. The dedicated benchmark workflow additionally requires the exact authorization commit message and the experiment branch. Normal PR CI never performs paid inference.

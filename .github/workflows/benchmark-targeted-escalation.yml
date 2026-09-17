@@ -24,10 +24,15 @@ on:
         default: '360'
         type: string
       max_estimated_usd:
-        description: 'Stop when observed token-cost estimate reaches this USD cap'
+        description: 'Stop after a bounded call if observed token-cost estimate reaches this USD guard'
         required: true
         default: '1.50'
         type: string
+  push:
+    branches:
+      - experiment/targeted-pro-escalation
+    paths:
+      - .github/targeted-escalation-paid-run-token
 
 permissions:
   contents: read
@@ -46,7 +51,7 @@ env:
 
 jobs:
   paid-benchmark:
-    if: ${{ inputs.confirm_paid_benchmark == 'RUN_PAID_BENCHMARK' && vars.AWS_SAM_ARTIFACT_BUCKET != '' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.confirm_paid_benchmark == 'RUN_PAID_BENCHMARK') || (github.event_name == 'push' && github.event.head_commit.message == 'benchmark: RUN_PAID_TARGETED_ESCALATION')) && vars.AWS_SAM_ARTIFACT_BUCKET != '' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -75,10 +80,10 @@ jobs:
 
       - name: Run bounded paid benchmark
         env:
-          TARGETED_BENCHMARK_MAX_CASES: ${{ inputs.max_cases }}
-          TARGETED_BENCHMARK_MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
-          TARGETED_BENCHMARK_MAX_PRO_VIDEO_SECONDS: ${{ inputs.max_pro_video_seconds }}
-          TARGETED_BENCHMARK_MAX_ESTIMATED_USD: ${{ inputs.max_estimated_usd }}
+          TARGETED_BENCHMARK_MAX_CASES: ${{ github.event_name == 'workflow_dispatch' && inputs.max_cases || '8' }}
+          TARGETED_BENCHMARK_MAX_MODEL_CALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_model_calls || '40' }}
+          TARGETED_BENCHMARK_MAX_PRO_VIDEO_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_pro_video_seconds || '360' }}
+          TARGETED_BENCHMARK_MAX_ESTIMATED_USD: ${{ github.event_name == 'workflow_dispatch' && inputs.max_estimated_usd || '1.50' }}
         run: node experiments/targeted-escalation/run-paid-benchmark.mjs targeted-escalation-corpus targeted-escalation-paid-results
 
       - name: Grade quality, economics and decision gate
@@ -86,6 +91,7 @@ jobs:
         run: |
           if [ -f targeted-escalation-paid-results/paid-results.json ]; then
             node experiments/targeted-escalation/grade-paid-results.mjs targeted-escalation-paid-results
+            node experiments/targeted-escalation/refine-paid-grading.mjs targeted-escalation-paid-results
           fi
 
       - name: Add benchmark summary

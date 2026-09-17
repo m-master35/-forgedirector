@@ -134,7 +134,7 @@ async function analyze({ filePath, caseDef, durationSeconds, mode, segmentContex
     context: [
       caseDef.context || '',
       rawLite
-        ? `RAW LITE LOCALIZATION DIAGNOSTIC: this clip is ${round(durationSeconds, 2)} seconds long. Inspect the whole supplied clip, especially the middle and end. Report genuine localized visual defects with timestamps.`,
+        ? `RAW LITE LOCALIZATION DIAGNOSTIC: this clip is ${round(durationSeconds, 2)} seconds long. Inspect the whole supplied clip, especially the middle and end. Report genuine localized visual defects with timestamps.`
         : segmentContext,
     ].filter(Boolean).join('\n\n'),
     requirements,

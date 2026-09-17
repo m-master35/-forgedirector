@@ -1,14 +1,17 @@
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   buildTargetedEscalationPlan,
   normalizeTargetedEscalationConfig,
-  targetedEscalationDurationMetrics,
 } from '../../backend/targeted-escalation.mjs';
 import {
   extractMediaSegment,
   probeMedia,
 } from '../../backend/targeted-escalation-media.mjs';
+import {
+  effectiveEscalationMetrics,
+  summarizeLatency,
+} from './benchmark-utils.mjs';
 
 const corpusDir = path.resolve(process.argv[2] || 'targeted-escalation-corpus');
 const outDir = path.resolve(process.argv[3] || 'targeted-escalation-offline-results');
@@ -73,6 +76,7 @@ function structuralLiteFixture(caseDef, durationSeconds) {
     });
   }
 
+  // Preserve a full-duration evidence window without adding a finding.
   timeline.push({
     startSeconds: 0,
     endSeconds: durationSeconds,
@@ -84,19 +88,10 @@ function structuralLiteFixture(caseDef, durationSeconds) {
 
   return {
     timeline,
-    compliance: {
-      checks,
-    },
+    compliance: { checks },
     regenerationPrompts: [],
     retentionRisks: [],
   };
-}
-
-function percentile(values, p) {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-  return Math.round(sorted[index] * 100) / 100;
 }
 
 await mkdir(outDir, { recursive: true });
@@ -112,11 +107,7 @@ for (const caseDef of manifest.cases) {
   try {
     sourceProbe = await probeMedia(sourcePath);
   } catch (error) {
-    failures.push({
-      case: caseDef.name,
-      stage: 'probe',
-      error: error.message,
-    });
+    failures.push({ case: caseDef.name, stage: 'probe', error: error.message });
     continue;
   }
 
@@ -136,13 +127,11 @@ for (const caseDef of manifest.cases) {
       },
     });
 
-    const plan = buildTargetedEscalationPlan(analysis, {
-      durationSeconds,
-      config,
-    });
+    const plan = buildTargetedEscalationPlan(analysis, { durationSeconds, config });
+    const mediaEconomics = effectiveEscalationMetrics(durationSeconds, plan);
 
     const segmentDir = path.join(outDir, 'segments', caseDef.name, strategy);
-    await mkdir(segmentDir, { recursive: true });
+    if (plan.mergedIntervals.length) await mkdir(segmentDir, { recursive: true });
 
     const extracted = [];
     for (const interval of plan.mergedIntervals) {
@@ -180,15 +169,10 @@ for (const caseDef of manifest.cases) {
       }
     }
 
-    const durationMetrics = targetedEscalationDurationMetrics(
-      durationSeconds,
-      plan.mergedIntervals,
-    );
-
     const expectedWholeVideo = caseDef.expectedRouting === 'whole_video';
     const routingExpectationMet = expectedWholeVideo
       ? plan.wholeVideoFindings.length > 0
-      : true;
+      : plan.wholeVideoFindings.length === 0;
 
     rows.push({
       case: caseDef.name,
@@ -204,11 +188,13 @@ for (const caseDef of manifest.cases) {
       wholeVideoFallbackRequired: plan.wholeVideoFallbackRequired,
       routingExpectationMet,
       budget: plan.budget,
-      durationMetrics,
+      mediaEconomics,
       extracted,
     });
   }
 
+  // Exact-ground-truth segment-equivalence control. This isolates the question:
+  // can Pro detect the defect when localization is perfect?
   for (const [index, truth] of (caseDef.groundTruth || []).entries()) {
     const eqDir = path.join(outDir, 'equivalence', caseDef.name);
     await mkdir(eqDir, { recursive: true });
@@ -251,55 +237,81 @@ for (const caseDef of manifest.cases) {
 }
 
 const strategyRows = rows.filter((row) => strategies.includes(row.strategy));
+const latency = summarizeLatency(extractionLatencies);
+const routingExpectationFailures = strategyRows
+  .filter((row) => row.routingExpectationMet === false)
+  .map((row) => ({ case: row.case, strategy: row.strategy }));
+
+const byStrategy = Object.fromEntries(strategies.map((strategy) => {
+  const selected = strategyRows.filter((row) => row.strategy === strategy);
+  const baselineSeconds = selected.reduce((sum, row) => sum + (row.mediaEconomics.baselineProSeconds || 0), 0);
+  const effectiveSeconds = selected.reduce((sum, row) => sum + (row.mediaEconomics.effectiveProSeconds || 0), 0);
+  const reductionSeconds = Math.max(0, baselineSeconds - effectiveSeconds);
+  return [strategy, {
+    cases: selected.length,
+    baselineProSeconds: Math.round(baselineSeconds * 1000) / 1000,
+    effectiveProSeconds: Math.round(effectiveSeconds * 1000) / 1000,
+    reductionSeconds: Math.round(reductionSeconds * 1000) / 1000,
+    reductionPercent: baselineSeconds > 0
+      ? Math.round((reductionSeconds / baselineSeconds) * 10000) / 100
+      : null,
+  }];
+}));
+
 const summary = {
   corpusVersion: manifest.version,
   casesAttempted: manifest.cases.length,
   structuralRows: strategyRows.length,
   failures,
-  extractionLatencyMs: {
-    p50: percentile(extractionLatencies, 50),
-    p95: percentile(extractionLatencies, 95),
-    samples: extractionLatencies.length,
-  },
-  routingExpectationFailures: strategyRows.filter((row) => row.routingExpectationMet === false)
-    .map((row) => ({ case: row.case, strategy: row.strategy })),
+  extractionLatencyMs: latency,
+  routingExpectationFailures,
+  byStrategy,
   rows,
 };
 
+await Promise.all([
+  writeFile(
+    path.join(outDir, 'offline-results.json'),
+    JSON.stringify(summary, null, 2) + '\n',
+    'utf8',
+  ),
+  writeFile(
+    path.join(outDir, 'offline-results.md'),
+    [
+      '# ForgeDirector targeted escalation offline structural benchmark',
+      '',
+      `- Corpus: **${manifest.version}**`,
+      `- Cases attempted: **${manifest.cases.length}**`,
+      `- Structural strategy rows: **${strategyRows.length}**`,
+      `- Extraction failures: **${failures.length}**`,
+      `- Routing expectation failures: **${routingExpectationFailures.length}**`,
+      `- Extraction latency p50/p95: **${latency.p50 ?? 'n/a'} / ${latency.p95 ?? 'n/a'} ms**`,
+      '',
+      '## Effective Pro-media comparison',
+      '',
+      '| Strategy | Baseline Pro seconds | Effective Pro seconds | Reduction |',
+      '|---|---:|---:|---:|',
+      ...strategies.map((strategy) => {
+        const item = byStrategy[strategy];
+        return `| ${strategy} | ${item.baselineProSeconds} | ${item.effectiveProSeconds} | ${item.reductionPercent ?? 'n/a'}% |`;
+      }),
+      '',
+      '| Case | Category | Strategy | Eligible | Whole-video | Targeted segment seconds | Effective route | Effective Pro seconds | Effective reduction |',
+      '|---|---|---|---:|---:|---:|---|---:|---:|',
+      ...strategyRows.map((row) => (
+        `| ${row.case} | ${row.category} | ${row.strategy} | ${row.eligibleFindings} | ${row.wholeVideoFindings} | ${row.mediaEconomics.targetedSegmentSeconds} | ${row.mediaEconomics.effectiveRoute} | ${row.mediaEconomics.effectiveProSeconds} | ${row.mediaEconomics.reductionPercent ?? 'n/a'}% |`
+      )),
+      '',
+      'The baseline/effective seconds above model the escalation-confirmation call only. The existing blind compliance verifier is deliberately excluded here and must be reported separately in the paid benchmark; this prevents targeted savings from hiding an unchanged full-video Pro verifier call.',
+      '',
+      'This is a structural benchmark only. It validates routing, padding, merging, extraction, source-time mapping assumptions and potential Pro-duration reduction. It does **not** claim model-quality preservation or monetary savings until a paid model benchmark is run.',
+      '',
+    ].join('\n'),
+    'utf8',
+  ),
+]);
 
-await import('node:fs/promises').then(({ writeFile }) => (
-  Promise.all([
-    writeFile(
-      path.join(outDir, 'offline-results.json'),
-      JSON.stringify(summary, null, 2) + '\n',
-      'utf8',
-    ),
-    writeFile(
-      path.join(outDir, 'offline-results.md'),
-      [
-        '# ForgeDirector targeted escalation offline structural benchmark',
-        '',
-        `- Corpus: **${manifest.version}**`,
-        `- Cases attempted: **${manifest.cases.length}**`,
-        `- Structural strategy rows: **${strategyRows.length}**`,
-        `- Extraction failures: **${failures.length}**`,
-        `- Extraction latency p50/p95: **${percentile(extractionLatencies, 50) ?? 'n/a'} / ${percentile(extractionLatencies, 95) ?? 'n/a'} ms**`,
-        '',
-        '| Case | Category | Strategy | Eligible | Whole-video | Merged Pro windows | Targeted Pro seconds | Reduction | Full-video fallback? |',
-        '|---|---|---|---:|---:|---:|---:|---:|---|',
-        ...strategyRows.map((row) => (
-          `| ${row.case} | ${row.category} | ${row.strategy} | ${row.eligibleFindings} | ${row.wholeVideoFindings} | ${row.mergedIntervals} | ${row.durationMetrics.targetedProSeconds} | ${row.durationMetrics.reductionPercent ?? 'n/a'}% | ${row.wholeVideoFallbackRequired ? 'yes' : 'no'} |`
-        )),
-        '',
-        'This is a structural benchmark only. It validates routing, padding, merging, extraction, source-time mapping assumptions and potential Pro-duration reduction. It does **not** claim model-quality preservation or monetary savings until a paid model benchmark is run.',
-        '',
-      ].join('\n'),
-      'utf8',
-    ),
-  ])
-));
-
-if (failures.length) {
+if (failures.length || routingExpectationFailures.length) {
   console.error(JSON.stringify(summary, null, 2));
   process.exitCode = 2;
 } else {

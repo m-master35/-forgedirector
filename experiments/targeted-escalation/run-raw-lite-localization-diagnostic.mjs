@@ -41,11 +41,15 @@ function round(value, digits = 6) {
 }
 
 function modelClass(modelId) {
-  return String(modelId || '').toLowerCase().includes('pro') ? 'pro' : 'lite';
+  const value = String(modelId || '').toLowerCase();
+  if (value.includes('pro')) return 'pro';
+  if (value.includes('lite')) return 'lite';
+  return 'unknown';
 }
 
 function usageCost(usage, klass) {
   const rate = rates[klass];
+  if (!rate) return 0;
   const input = Math.max(0, Number(usage?.inputTokens || 0));
   const output = Math.max(0, Number(usage?.outputTokens || 0));
   return input / 1_000_000 * rate.inputPerMillion
@@ -80,6 +84,87 @@ function grade(caseDef, findings) {
       endSeconds: finding.approximateEndSeconds,
       reason: finding.escalationReason,
     })),
+  };
+}
+
+function localizationMetrics(caseDef, findings) {
+  const truth = caseDef.groundTruth?.[0];
+  if (!truth) return null;
+  const candidates = (findings || [])
+    .map((finding) => ({ finding, interval: intervalOf(finding) }))
+    .filter(({ interval }) => interval)
+    .map(({ finding, interval }) => ({
+      finding,
+      interval,
+      exactType: String(finding.defectType) === String(truth.defectType),
+      overlap: overlapSeconds(interval.start, interval.end, truth.startSeconds, truth.endSeconds),
+    }))
+    .filter((item) => item.overlap > 0)
+    .sort((a, b) => Number(b.exactType) - Number(a.exactType) || b.overlap - a.overlap);
+
+  if (!candidates.length) {
+    return {
+      localized: false,
+      returnedDefectType: null,
+      returnedStartSeconds: null,
+      returnedEndSeconds: null,
+      startErrorSeconds: null,
+      endErrorSeconds: null,
+      meanAbsoluteBoundaryErrorSeconds: null,
+      temporalIoU: 0,
+    };
+  }
+
+  const best = candidates[0];
+  const truthDuration = Math.max(0, Number(truth.endSeconds) - Number(truth.startSeconds));
+  const returnedDuration = Math.max(0, best.interval.end - best.interval.start);
+  const union = truthDuration + returnedDuration - best.overlap;
+  return {
+    localized: true,
+    returnedDefectType: best.finding.defectType || null,
+    returnedStartSeconds: round(best.interval.start, 3),
+    returnedEndSeconds: round(best.interval.end, 3),
+    startErrorSeconds: round(best.interval.start - Number(truth.startSeconds), 3),
+    endErrorSeconds: round(best.interval.end - Number(truth.endSeconds), 3),
+    meanAbsoluteBoundaryErrorSeconds: round((
+      Math.abs(best.interval.start - Number(truth.startSeconds))
+      + Math.abs(best.interval.end - Number(truth.endSeconds))
+    ) / 2, 3),
+    temporalIoU: union > 0 ? round(best.overlap / union, 4) : 0,
+  };
+}
+
+function planLocalizationEvidence(caseDef, plan, durationSeconds) {
+  const truth = caseDef.groundTruth?.[0];
+  const intervals = Array.isArray(plan?.mergedIntervals) ? plan.mergedIntervals : [];
+  const truthOverlappingIntervals = truth
+    ? intervals.filter((interval) => overlapSeconds(
+      interval.startSeconds,
+      interval.endSeconds,
+      truth.startSeconds,
+      truth.endSeconds,
+    ) > 0)
+    : [];
+  const selectedSeconds = intervals.reduce((sum, interval) => sum + Math.max(0, Number(interval.durationSeconds || 0)), 0);
+  return {
+    truthOverlappingIntervalCount: truthOverlappingIntervals.length,
+    selectedSeconds: round(selectedSeconds, 3),
+    avoidedFullVideoSeconds: round(Math.max(0, Number(durationSeconds) - selectedSeconds), 3),
+    hasUsefulShortSegment: truthOverlappingIntervals.some((interval) => Number(interval.durationSeconds || 0) < Number(durationSeconds)),
+  };
+}
+
+function metaEvidence(meta) {
+  return {
+    modelId: meta?.modelId || null,
+    modelClass: modelClass(meta?.modelId),
+    analysisRetryUsed: meta?.analysisRetryUsed === true,
+    coverageRetryUsed: meta?.coverageRetryUsed === true,
+    fallbackModelUsed: meta?.fallbackModelUsed === true,
+    usage: meta?.usage || null,
+    complianceVerificationUsed: meta?.complianceVerificationUsed === true,
+    complianceVerificationModelIds: meta?.complianceVerificationModelIds || [],
+    complianceVerificationUsage: meta?.complianceVerificationUsage || null,
   };
 }
 
@@ -160,7 +245,9 @@ async function analyze({ filePath, caseDef, durationSeconds, mode, segmentContex
   const klass = modelClass(meta.modelId);
   const analysisCost = usageCost(meta.usage, klass);
   const verifierUsage = meta.complianceVerificationUsage || null;
-  // Every forced-Pro diagnostic currently reports Pro as the blind verifier.
+  // Forced-Pro controls may use more than one verifier model. Pricing all aggregate
+  // verifier tokens at Pro rates is only a conservative estimate of reported usage,
+  // not directly observed billing and not a complete end-to-end request cost.
   const verifierCost = verifierUsage ? usageCost(verifierUsage, 'pro') : 0;
   ledger.analyzeCalls += 1;
   ledger.reportedCostLowerBoundUsd += analysisCost + verifierCost;
@@ -171,11 +258,12 @@ async function analyze({ filePath, caseDef, durationSeconds, mode, segmentContex
     modelId: meta.modelId || null,
     analysisRetryUsed: meta.analysisRetryUsed === true,
     coverageRetryUsed: meta.coverageRetryUsed === true,
+    fallbackModelUsed: meta.fallbackModelUsed === true,
     usage: meta.usage || null,
     complianceVerificationUsed: meta.complianceVerificationUsed === true,
     complianceVerificationModelIds: meta.complianceVerificationModelIds || [],
     complianceVerificationUsage: verifierUsage,
-    reportedCostLowerBoundUsd: round(analysisCost + verifierCost),
+    estimatedCostFromReportedUsageUsd: round(analysisCost + verifierCost),
     latencyMs: round(performance.now() - started, 2),
   });
 
@@ -214,8 +302,13 @@ try {
       if (modelClass(lite.meta?.modelId) !== 'lite') {
         throw new Error(`Raw localization did not remain on Lite; observed ${lite.meta?.modelId}.`);
       }
+      if (lite.meta?.fallbackModelUsed === true || lite.meta?.coverageRetryUsed === true) {
+        throw new Error(`Raw Lite evidence is contaminated by fallback/recovery: fallback=${lite.meta?.fallbackModelUsed}, coverageRetry=${lite.meta?.coverageRetryUsed}.`);
+      }
+
       const liteFindings = collectSuspiciousIntervals(lite.analysis, { durationSeconds });
       const liteGrade = grade(caseDef, liteFindings);
+      const liteLocalization = localizationMetrics(caseDef, liteFindings);
 
       const config = normalizeTargetedEscalationConfig({
         experiments: { targetedEscalation: {
@@ -227,20 +320,35 @@ try {
         } },
       });
       const plan = buildTargetedEscalationPlan(lite.analysis, { durationSeconds, config });
+      const planEvidence = planLocalizationEvidence(caseDef, plan, durationSeconds);
+      const liteLocalizationSuccessful = Boolean(
+        liteGrade.temporalHitAnyType
+        && plan.targetedEscalationPossible
+        && !plan.wholeVideoFallbackRequired
+        && planEvidence.hasUsefulShortSegment
+      );
 
-      const fullPro = await analyze({
-        filePath: sourcePath,
-        caseDef,
-        durationSeconds,
-        mode: 'full-pro',
-        segmentContext: 'FULL-CLIP PRO CONTROL: inspect the entire video and timestamp the localized defect described in the context.',
-      });
-      const fullFindings = collectSuspiciousIntervals(fullPro.analysis, { durationSeconds });
-      const fullGrade = grade(caseDef, fullFindings);
-
+      let fullProRecord = null;
       const targetedFindings = [];
       const segments = [];
-      if (plan.targetedEscalationPossible && !plan.wholeVideoFallbackRequired) {
+
+      if (liteLocalizationSuccessful) {
+        const fullPro = await analyze({
+          filePath: sourcePath,
+          caseDef,
+          durationSeconds,
+          mode: 'full-pro',
+          segmentContext: 'FULL-CLIP PRO CONTROL: inspect the entire video and timestamp the localized defect described in the context.',
+        });
+        const fullFindings = collectSuspiciousIntervals(fullPro.analysis, { durationSeconds });
+        fullProRecord = {
+          ...metaEvidence(fullPro.meta),
+          grade: grade(caseDef, fullFindings),
+          localization: localizationMetrics(caseDef, fullFindings),
+          findings: fullFindings,
+          analysis: fullPro.analysis,
+        };
+
         for (const interval of plan.mergedIntervals.slice(0, 2)) {
           const outputPath = path.join(workspace, `${caseDef.name}-${interval.intervalId}.mp4`);
           const segment = await extractMediaSegment({
@@ -267,20 +375,34 @@ try {
             sourceEndSeconds: segment.sourceEndSeconds,
             outputDurationSeconds: segment.outputDurationSeconds,
             modelId: pro.meta?.modelId || null,
+            meta: metaEvidence(pro.meta),
+            analysis: pro.analysis,
           });
         }
       }
-      const targetedGrade = grade(caseDef, targetedFindings);
 
       rows.push({
         case: caseDef.name,
         category: caseDef.category,
         durationSeconds,
         truth: caseDef.groundTruth?.[0] || null,
-        lite: { modelId: lite.meta?.modelId || null, grade: liteGrade, findings: liteFindings },
+        lite: {
+          ...metaEvidence(lite.meta),
+          grade: liteGrade,
+          localization: liteLocalization,
+          findings: liteFindings,
+          analysis: lite.analysis,
+        },
         plan,
-        fullPro: { modelId: fullPro.meta?.modelId || null, grade: fullGrade, findings: fullFindings },
-        targeted: { segments, grade: targetedGrade, findings: targetedFindings },
+        planEvidence,
+        liteLocalizationSuccessful,
+        fullPro: fullProRecord,
+        targeted: {
+          segments,
+          grade: grade(caseDef, targetedFindings),
+          localization: localizationMetrics(caseDef, targetedFindings),
+          findings: targetedFindings,
+        },
       });
     } catch (error) {
       failures.push({ case: caseDef.name, error: error?.message || String(error) });
@@ -294,8 +416,14 @@ const summary = {
   benchmarkType: 'raw-lite-localization-production-api-diagnostic',
   timestamp: new Date().toISOString(),
   corpusVersion: manifest.version,
-  interpretation: 'Raw Lite requests deliberately omit declared duration to prevent the production full-duration recovery guard from replacing Lite with Pro. True duration is still stated in context. This is diagnostic evidence only; it is not a production configuration recommendation.',
-  costCaveat: 'reportedCostLowerBoundUsd is based on response-reported final analysis usage plus reported verifier usage. Earlier hidden analysis recovery calls, if any, are not included by the production endpoint.',
+  interpretation: 'Raw Lite requests deliberately omit declared duration to prevent the production full-duration recovery guard from replacing Lite with Pro. True duration is still stated in context. Pro controls and targeted-Pro calls run only when Lite itself successfully localizes a useful short segment. This is diagnostic evidence only; it is not a production configuration recommendation.',
+  costAccounting: {
+    directlyObservedProviderUsage: 'Response-reported analysis token usage and response-reported compliance-verifier token usage only.',
+    directlyObservedProviderCostUsd: null,
+    estimatedReportedUsageCostUsd: round(ledger.reportedCostLowerBoundUsd),
+    unobservableCost: 'Earlier hidden analysis retries/recovery calls are not accumulated into response meta.usage by the production endpoint and therefore cannot be priced from this diagnostic response.',
+  },
+  costCaveat: 'reportedCostLowerBoundUsd is an estimate from response-reported final analysis usage plus reported verifier usage. It is not directly observed billing and may omit earlier hidden analysis recovery calls.',
   limits: { maxAnalyzeCalls, maxReportedCostLowerBoundUsd },
   ledger: { ...ledger, reportedCostLowerBoundUsd: round(ledger.reportedCostLowerBoundUsd) },
   failures,
@@ -308,13 +436,16 @@ const md = [
   '',
   `- Cases completed: **${rows.length}/${cases.length}**`,
   `- Analyze calls: **${ledger.analyzeCalls}/${maxAnalyzeCalls}**`,
-  `- Reported final-call cost lower bound: **$${round(ledger.reportedCostLowerBoundUsd)}**`,
+  `- Estimated cost from response-reported usage: **$${round(ledger.reportedCostLowerBoundUsd)}**`,
+  `- Direct provider billing observed: **no**`,
   `- Failures: **${failures.length}**`,
   '',
-  '| Case | Lite temporal hit | Lite exact-type hit | Targeting possible | Full-Pro temporal hit | Targeted-Pro temporal hit | Targeted segments |',
-  '|---|---:|---:|---:|---:|---:|---:|',
-  ...rows.map((row) => `| ${row.case} | ${row.lite.grade.temporalHitAnyType} | ${row.lite.grade.exactTypeHit} | ${row.plan.targetedEscalationPossible && !row.plan.wholeVideoFallbackRequired} | ${row.fullPro.grade.temporalHitAnyType} | ${row.targeted.grade.temporalHitAnyType} | ${row.targeted.segments.length} |`),
+  '| Case | Lite temporal hit | Lite exact-type hit | Mean boundary error (s) | Useful short segment | Full-Pro run | Full-Pro temporal hit | Targeted-Pro temporal hit | Targeted segments |',
+  '|---|---:|---:|---:|---:|---:|---:|---:|---:|',
+  ...rows.map((row) => `| ${row.case} | ${row.lite.grade.temporalHitAnyType} | ${row.lite.grade.exactTypeHit} | ${row.lite.localization?.meanAbsoluteBoundaryErrorSeconds ?? 'n/a'} | ${row.planEvidence.hasUsefulShortSegment} | ${Boolean(row.fullPro)} | ${row.fullPro?.grade?.temporalHitAnyType ?? 'n/a'} | ${row.targeted.grade.temporalHitAnyType} | ${row.targeted.segments.length} |`),
   '',
-  'This intentionally bypasses only the **proxy benchmark’s declared-duration field** so that the existing production recovery guard cannot silently substitute Pro for Lite. Production code/configuration is unchanged.',
+  'Raw Lite evidence is rejected if the returned model is not Lite, or if the response reports fallback-model or full-duration coverage recovery usage. Pro work is conditional on a genuine Lite-driven localization; no segment is manufactured from ground-truth timestamps.',
+  '',
+  'This intentionally bypasses only the **proxy benchmark’s declared-duration field** so that the existing production full-duration recovery guard cannot silently substitute Pro for Lite. Production code/configuration is unchanged.',
 ];
 await writeFile(path.join(outDir, 'raw-lite-results.md'), `${md.join('\n')}\n`, 'utf8');

@@ -1,0 +1,97 @@
+name: Benchmark Targeted Pro Escalation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_paid_benchmark:
+        description: 'Type RUN_PAID_BENCHMARK to permit bounded Bedrock inference'
+        required: true
+        default: 'NO'
+        type: string
+      max_cases:
+        description: 'Maximum corpus cases'
+        required: true
+        default: '8'
+        type: string
+      max_model_calls:
+        description: 'Hard maximum Bedrock calls'
+        required: true
+        default: '40'
+        type: string
+      max_pro_video_seconds:
+        description: 'Hard maximum total video seconds submitted to Nova Pro'
+        required: true
+        default: '360'
+        type: string
+      max_estimated_usd:
+        description: 'Stop when observed token-cost estimate reaches this USD cap'
+        required: true
+        default: '1.50'
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: forgedirector-targeted-escalation-paid-benchmark
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_SAM_ARTIFACT_BUCKET: ${{ vars.AWS_SAM_ARTIFACT_BUCKET }}
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+  TARGETED_BENCHMARK_LITE_MODEL_ID: eu.amazon.nova-2-lite-v1:0
+  TARGETED_BENCHMARK_PRO_MODEL_ID: eu.amazon.nova-pro-v1:0
+
+jobs:
+  paid-benchmark:
+    if: ${{ inputs.confirm_paid_benchmark == 'RUN_PAID_BENCHMARK' && vars.AWS_SAM_ARTIFACT_BUCKET != '' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v6
+
+      - name: Configure existing AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorTargetedEscalationBenchmark
+          mask-aws-account-id: true
+
+      - name: Install video tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Install isolated benchmark dependencies
+        working-directory: experiments/targeted-escalation
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build benchmark corpus
+        run: bash experiments/targeted-escalation/build-corpus.sh targeted-escalation-corpus
+
+      - name: Run bounded paid benchmark
+        env:
+          TARGETED_BENCHMARK_MAX_CASES: ${{ inputs.max_cases }}
+          TARGETED_BENCHMARK_MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
+          TARGETED_BENCHMARK_MAX_PRO_VIDEO_SECONDS: ${{ inputs.max_pro_video_seconds }}
+          TARGETED_BENCHMARK_MAX_ESTIMATED_USD: ${{ inputs.max_estimated_usd }}
+        run: node experiments/targeted-escalation/run-paid-benchmark.mjs targeted-escalation-corpus targeted-escalation-paid-results
+
+      - name: Add benchmark summary
+        if: always()
+        run: |
+          if [ -f targeted-escalation-paid-results/paid-results.md ]; then
+            cat targeted-escalation-paid-results/paid-results.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: targeted-escalation-paid-${{ github.run_id }}
+          path: targeted-escalation-paid-results
+          if-no-files-found: warn

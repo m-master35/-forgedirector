@@ -81,11 +81,22 @@ jobs:
           TARGETED_BENCHMARK_MAX_ESTIMATED_USD: ${{ inputs.max_estimated_usd }}
         run: node experiments/targeted-escalation/run-paid-benchmark.mjs targeted-escalation-corpus targeted-escalation-paid-results
 
+      - name: Grade quality, economics and decision gate
+        if: always()
+        run: |
+          if [ -f targeted-escalation-paid-results/paid-results.json ]; then
+            node experiments/targeted-escalation/grade-paid-results.mjs targeted-escalation-paid-results
+          fi
+
       - name: Add benchmark summary
         if: always()
         run: |
           if [ -f targeted-escalation-paid-results/paid-results.md ]; then
             cat targeted-escalation-paid-results/paid-results.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f targeted-escalation-paid-results/economic-analysis.md ]; then
+            printf '\n---\n\n' >> "$GITHUB_STEP_SUMMARY"
+            cat targeted-escalation-paid-results/economic-analysis.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload benchmark evidence
@@ -93,5 +104,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: targeted-escalation-paid-${{ github.run_id }}
-          path: targeted-escalation-paid-results
+          path: |
+            targeted-escalation-paid-results/paid-results.json
+            targeted-escalation-paid-results/paid-results.md
+            targeted-escalation-paid-results/economic-analysis.json
+            targeted-escalation-paid-results/economic-analysis.md
           if-no-files-found: warn

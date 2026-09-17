@@ -3,7 +3,8 @@
   "notes": [
     "Synthetic localized cases have timestamp-controlled ground truth.",
     "Real-video controls reuse public sources already used by ForgeDirector's existing live benchmark.",
-    "Global/context-sensitive cases are intentional routing controls and should not be forced through targeted v1."
+    "Global/context-sensitive cases are intentional routing controls and should not be forced through targeted v1.",
+    "The first eight cases form the default bounded paid subset and include five localized defects, one global continuity control, one no-defect control and one reused real-video control."
   ],
   "cases": [
     {
@@ -82,18 +83,6 @@
       "expectedRouting": "whole_video"
     },
     {
-      "name": "global-pacing",
-      "file": "global-pacing.mp4",
-      "category": "global_pacing",
-      "context": "Assess pacing across the entire video. This is intentionally a global pacing control.",
-      "requirements": {},
-      "expectedChecks": [],
-      "groundTruth": [
-        {"sourceFindingId": "groundtruth:global-pacing:0", "defectType": "global_pacing", "startSeconds": 0, "endSeconds": 20, "critical": false}
-      ],
-      "expectedRouting": "whole_video"
-    },
-    {
       "name": "no-defect",
       "file": "no-defect.mp4",
       "category": "no_defect",
@@ -134,6 +123,18 @@
         {"type": "mustShow", "rule": "person presenting or reviewing the product", "status": "pass"}
       ],
       "groundTruth": []
+    },
+    {
+      "name": "global-pacing",
+      "file": "global-pacing.mp4",
+      "category": "global_pacing",
+      "context": "Assess pacing across the entire video. This is intentionally a global pacing control.",
+      "requirements": {},
+      "expectedChecks": [],
+      "groundTruth": [
+        {"sourceFindingId": "groundtruth:global-pacing:0", "defectType": "global_pacing", "startSeconds": 0, "endSeconds": 20, "critical": false}
+      ],
+      "expectedRouting": "whole_video"
     }
   ]
 }

@@ -1,3 +1,6 @@
 One-shot authorization marker for the two-case raw-Lite localization diagnostic on the isolated targeted-escalation branch.
 
-The workflow calls only the existing production API, changes no production code/configuration, and is limited to visible-text-defect and localized-artifact synthetic cases, at most 8 analyze calls, with a $0.40 response-reported final-call cost lower-bound guard. Production recovery calls not exposed in response usage are acknowledged separately in the evidence.
+Validated experiment harness head before arming: 0f51ab14a4a27d731b3d823496bd1c7178e23b5d.
+Retry marker: corrected conditional-Pro diagnostic after full pre-spend CI passed.
+
+The workflow calls only the existing production API, changes no production code/configuration, and is limited to visible-text-defect and localized-artifact synthetic cases, at most 8 analyze calls, with a $0.40 response-reported usage-cost guard. Production recovery calls not exposed in response usage are acknowledged separately in the evidence.

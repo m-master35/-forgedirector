@@ -1,0 +1,74 @@
+name: Targeted escalation experiment CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/targeted-escalation*.mjs'
+      - 'tests/targeted-escalation*.mjs'
+      - 'experiments/targeted-escalation/**'
+      - 'docs/experiments/targeted-escalation-*.md'
+      - '.github/workflows/targeted-escalation-experiment-ci.yml'
+  push:
+    branches:
+      - experiment/targeted-pro-escalation
+
+permissions:
+  contents: read
+
+jobs:
+  validate-targeted-escalation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check experiment JavaScript syntax
+        run: |
+          node --check backend/targeted-escalation.mjs
+          node --check backend/targeted-escalation-media.mjs
+          node --check backend/targeted-escalation-pro.mjs
+          node --check backend/targeted-escalation-runtime.mjs
+          node --check tests/targeted-escalation.mjs
+          node --check tests/targeted-escalation-media.mjs
+          node --check tests/targeted-escalation-pro.mjs
+          node --check tests/targeted-escalation-runtime.mjs
+          node --check tests/targeted-escalation-benchmark.mjs
+          node --check experiments/targeted-escalation/benchmark-utils.mjs
+          node --check experiments/targeted-escalation/run-offline-benchmark.mjs
+          node --check experiments/targeted-escalation/run-paid-benchmark.mjs
+          node --check experiments/targeted-escalation/run-live-api-proxy-benchmark.mjs
+          node --check experiments/targeted-escalation/run-raw-lite-localization-diagnostic.mjs
+          node --check experiments/targeted-escalation/measure-verifier-overhead.mjs
+          node --check experiments/targeted-escalation/grade-paid-results.mjs
+          node --check experiments/targeted-escalation/refine-paid-grading.mjs
+
+      - name: Run routing, interval, cache, spend, runtime and economics tests
+        run: |
+          node tests/targeted-escalation.mjs
+          node tests/targeted-escalation-pro.mjs
+          node tests/targeted-escalation-runtime.mjs
+          node tests/targeted-escalation-benchmark.mjs
+
+      - name: Install ffmpeg for isolated media tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Run synthetic extraction tests
+        run: node tests/targeted-escalation-media.mjs
+
+      - name: Build timestamp-controlled benchmark corpus
+        run: bash experiments/targeted-escalation/build-corpus.sh targeted-escalation-corpus
+
+      - name: Run offline structural benchmark
+        run: node experiments/targeted-escalation/run-offline-benchmark.mjs targeted-escalation-corpus targeted-escalation-offline-results
+
+      - name: Upload offline benchmark summary only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: targeted-escalation-offline-${{ github.run_id }}
+          path: |
+            targeted-escalation-offline-results/offline-results.json
+            targeted-escalation-offline-results/offline-results.md
+          if-no-files-found: warn

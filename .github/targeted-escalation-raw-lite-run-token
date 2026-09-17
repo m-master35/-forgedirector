@@ -1,0 +1,3 @@
+One-shot authorization marker for the two-case raw-Lite localization diagnostic on the isolated targeted-escalation branch.
+
+The workflow calls only the existing production API, changes no production code/configuration, and is limited to visible-text-defect and localized-artifact synthetic cases, at most 8 analyze calls, with a $0.40 response-reported final-call cost lower-bound guard. Production recovery calls not exposed in response usage are acknowledged separately in the evidence.

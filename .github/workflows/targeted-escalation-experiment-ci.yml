@@ -30,6 +30,7 @@ jobs:
           node --check tests/targeted-escalation.mjs
           node --check tests/targeted-escalation-media.mjs
           node --check tests/targeted-escalation-pro.mjs
+          node --check experiments/targeted-escalation/run-offline-benchmark.mjs
 
       - name: Run routing, interval, cache and spend tests
         run: |
@@ -43,3 +44,17 @@ jobs:
 
       - name: Run synthetic extraction tests
         run: node tests/targeted-escalation-media.mjs
+
+      - name: Build timestamp-controlled benchmark corpus
+        run: bash experiments/targeted-escalation/build-corpus.sh targeted-escalation-corpus
+
+      - name: Run offline structural benchmark
+        run: node experiments/targeted-escalation/run-offline-benchmark.mjs targeted-escalation-corpus targeted-escalation-offline-results
+
+      - name: Upload offline benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: targeted-escalation-offline-${{ github.run_id }}
+          path: targeted-escalation-offline-results
+          if-no-files-found: warn

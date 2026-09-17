@@ -1,0 +1,61 @@
+name: Benchmark Targeted Escalation Live API Proxy
+
+on:
+  push:
+    branches:
+      - experiment/targeted-pro-escalation
+    paths:
+      - .github/targeted-escalation-live-api-proxy-run-token
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forgedirector-targeted-escalation-live-api-proxy
+  cancel-in-progress: false
+
+env:
+  API_URL: https://aexcr2wa265fhs3fxvwvvv6se40finfu.lambda-url.eu-west-1.on.aws
+
+jobs:
+  proxy-benchmark:
+    if: ${{ github.event.head_commit.message == 'benchmark: RUN_LIVE_API_TARGETED_PROXY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v6
+
+      - name: Install video tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Build benchmark corpus
+        run: bash experiments/targeted-escalation/build-corpus.sh targeted-escalation-corpus
+
+      - name: Run bounded live-API Pro proxy benchmark
+        env:
+          RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+          TARGETED_PROXY_MAX_CASES: '3'
+          TARGETED_PROXY_MAX_ANALYZE_CALLS: '12'
+          TARGETED_PROXY_MAX_PRO_SECONDS: '180'
+          TARGETED_PROXY_MAX_ESTIMATED_USD: '0.75'
+        run: node experiments/targeted-escalation/run-live-api-proxy-benchmark.mjs targeted-escalation-corpus targeted-escalation-live-api-proxy-results
+
+      - name: Add proxy benchmark summary
+        if: always()
+        run: |
+          if [ -f targeted-escalation-live-api-proxy-results/live-api-proxy-results.md ]; then
+            cat targeted-escalation-live-api-proxy-results/live-api-proxy-results.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload proxy benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: targeted-escalation-live-api-proxy-${{ github.run_id }}
+          path: |
+            targeted-escalation-live-api-proxy-results/live-api-proxy-results.json
+            targeted-escalation-live-api-proxy-results/live-api-proxy-results.md
+          if-no-files-found: warn

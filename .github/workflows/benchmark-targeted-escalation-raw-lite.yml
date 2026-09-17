@@ -1,0 +1,65 @@
+name: Benchmark Targeted Escalation Raw Lite Diagnostic
+
+on:
+  push:
+    branches:
+      - experiment/targeted-pro-escalation
+    paths:
+      - .github/targeted-escalation-raw-lite-run-token
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forgedirector-targeted-escalation-raw-lite
+  cancel-in-progress: false
+
+env:
+  API_URL: https://aexcr2wa265fhs3fxvwvvv6se40finfu.lambda-url.eu-west-1.on.aws
+
+jobs:
+  raw-lite-diagnostic:
+    if: "${{ github.event.head_commit.message == 'RUN_RAW_LITE_LOCALIZATION_DIAGNOSTIC' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v6
+
+      - name: Parse diagnostic harness
+        run: node --check experiments/targeted-escalation/run-raw-lite-localization-diagnostic.mjs
+
+      - name: Run targeted routing unit tests
+        run: node tests/targeted-escalation.mjs
+
+      - name: Install video tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Build timestamp-controlled corpus
+        run: bash experiments/targeted-escalation/build-corpus.sh targeted-escalation-corpus
+
+      - name: Run bounded raw-Lite diagnostic
+        env:
+          RAPIDAPI_PROXY_SECRET: ${{ secrets.RAPIDAPI_PROXY_SECRET }}
+          RAW_LITE_MAX_ANALYZE_CALLS: '8'
+          RAW_LITE_MAX_REPORTED_COST_USD: '0.40'
+        run: node experiments/targeted-escalation/run-raw-lite-localization-diagnostic.mjs targeted-escalation-corpus targeted-escalation-raw-lite-results
+
+      - name: Add diagnostic summary
+        if: always()
+        run: |
+          if [ -f targeted-escalation-raw-lite-results/raw-lite-results.md ]; then
+            cat targeted-escalation-raw-lite-results/raw-lite-results.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: targeted-escalation-raw-lite-${{ github.run_id }}
+          path: |
+            targeted-escalation-raw-lite-results/raw-lite-results.json
+            targeted-escalation-raw-lite-results/raw-lite-results.md
+          if-no-files-found: warn

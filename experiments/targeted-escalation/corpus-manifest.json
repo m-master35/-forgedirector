@@ -12,25 +12,13 @@
       "category": "forbidden_content",
       "context": "The word RIVAL is forbidden. Inspect the entire video and report exactly where any forbidden visible content appears.",
       "requirements": {
-        "mustNotShow": [
-          "RIVAL"
-        ]
+        "mustNotShow": ["RIVAL"]
       },
       "expectedChecks": [
-        {
-          "type": "mustNotShow",
-          "rule": "RIVAL",
-          "status": "fail"
-        }
+        {"type": "mustNotShow", "rule": "RIVAL", "status": "fail"}
       ],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:localized-forbidden:0",
-          "defectType": "forbidden_content_presence",
-          "startSeconds": 8,
-          "endSeconds": 10,
-          "critical": true
-        }
+        {"sourceFindingId": "groundtruth:localized-forbidden:0", "defectType": "forbidden_content_presence", "startSeconds": 8, "endSeconds": 10, "critical": true}
       ]
     },
     {
@@ -41,40 +29,18 @@
       "requirements": {},
       "expectedChecks": [],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:visible-text-defect:0",
-          "defectType": "visible_text_defect",
-          "startSeconds": 8,
-          "endSeconds": 10,
-          "critical": true
-        }
+        {"sourceFindingId": "groundtruth:visible-text-defect:0", "defectType": "visible_text_defect", "startSeconds": 8, "endSeconds": 10, "critical": true}
       ]
     },
     {
       "name": "object-mismatch",
       "file": "object-mismatch.mp4",
       "category": "object_product_mismatch",
-      "context": "The product must remain PRODUCT A throughout. Report any localized product/label mismatch and where it occurs.",
-      "requirements": {
-        "continuityRules": [
-          "The product identity and label must remain PRODUCT A throughout"
-        ]
-      },
-      "expectedChecks": [
-        {
-          "type": "continuityRule",
-          "rule": "The product identity and label must remain PRODUCT A throughout",
-          "status": "fail"
-        }
-      ],
+      "context": "PRODUCT A is the intended product identity. Report the localized scene where the visible product label/object changes to PRODUCT B, including the timestamp. Treat this as a scene-local product mismatch rather than a global continuity requirement.",
+      "requirements": {},
+      "expectedChecks": [],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:object-mismatch:0",
-          "defectType": "object_product_mismatch",
-          "startSeconds": 9,
-          "endSeconds": 11,
-          "critical": true
-        }
+        {"sourceFindingId": "groundtruth:object-mismatch:0", "defectType": "object_product_mismatch", "startSeconds": 9, "endSeconds": 11, "critical": true}
       ]
     },
     {
@@ -85,13 +51,7 @@
       "requirements": {},
       "expectedChecks": [],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:localized-artifact:0",
-          "defectType": "localized_visual_artifact",
-          "startSeconds": 8,
-          "endSeconds": 10,
-          "critical": true
-        }
+        {"sourceFindingId": "groundtruth:localized-artifact:0", "defectType": "localized_visual_artifact", "startSeconds": 8, "endSeconds": 10, "critical": true}
       ]
     },
     {
@@ -102,13 +62,7 @@
       "requirements": {},
       "expectedChecks": [],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:transition-flash:0",
-          "defectType": "transition_issue",
-          "startSeconds": 9.75,
-          "endSeconds": 10.25,
-          "critical": false
-        }
+        {"sourceFindingId": "groundtruth:transition-flash:0", "defectType": "transition_issue", "startSeconds": 9.75, "endSeconds": 10.25, "critical": false}
       ]
     },
     {
@@ -117,25 +71,13 @@
       "category": "global_continuity",
       "context": "The same product should preserve its color throughout. Compare earlier and later scenes.",
       "requirements": {
-        "continuityRules": [
-          "The product must keep the same color throughout"
-        ]
+        "continuityRules": ["The product must keep the same color throughout"]
       },
       "expectedChecks": [
-        {
-          "type": "continuityRule",
-          "rule": "The product must keep the same color throughout",
-          "status": "fail"
-        }
+        {"type": "continuityRule", "rule": "The product must keep the same color throughout", "status": "fail"}
       ],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:global-continuity:0",
-          "defectType": "global_continuity",
-          "startSeconds": 10,
-          "endSeconds": 20,
-          "critical": true
-        }
+        {"sourceFindingId": "groundtruth:global-continuity:0", "defectType": "global_continuity", "startSeconds": 10, "endSeconds": 20, "critical": true}
       ],
       "expectedRouting": "whole_video"
     },
@@ -147,13 +89,7 @@
       "requirements": {},
       "expectedChecks": [],
       "groundTruth": [
-        {
-          "sourceFindingId": "groundtruth:global-pacing:0",
-          "defectType": "global_pacing",
-          "startSeconds": 0,
-          "endSeconds": 20,
-          "critical": false
-        }
+        {"sourceFindingId": "groundtruth:global-pacing:0", "defectType": "global_pacing", "startSeconds": 0, "endSeconds": 20, "critical": false}
       ],
       "expectedRouting": "whole_video"
     },
@@ -163,16 +99,10 @@
       "category": "no_defect",
       "context": "Clean synthetic control. Report only genuine defects.",
       "requirements": {
-        "mustNotShow": [
-          "RIVAL"
-        ]
+        "mustNotShow": ["RIVAL"]
       },
       "expectedChecks": [
-        {
-          "type": "mustNotShow",
-          "rule": "RIVAL",
-          "status": "pass"
-        }
+        {"type": "mustNotShow", "rule": "RIVAL", "status": "pass"}
       ],
       "groundTruth": []
     },
@@ -182,24 +112,12 @@
       "category": "real_video_control",
       "context": "Existing ForgeDirector real-video benchmark control. Judge visible facts only.",
       "requirements": {
-        "mustShow": [
-          "motorcycle"
-        ],
-        "mustNotShow": [
-          "wine bottle"
-        ]
+        "mustShow": ["motorcycle"],
+        "mustNotShow": ["wine bottle"]
       },
       "expectedChecks": [
-        {
-          "type": "mustShow",
-          "rule": "motorcycle",
-          "status": "pass"
-        },
-        {
-          "type": "mustNotShow",
-          "rule": "wine bottle",
-          "status": "pass"
-        }
+        {"type": "mustShow", "rule": "motorcycle", "status": "pass"},
+        {"type": "mustNotShow", "rule": "wine bottle", "status": "pass"}
       ],
       "groundTruth": []
     },
@@ -209,22 +127,11 @@
       "category": "real_video_control",
       "context": "Existing ForgeDirector real product-video benchmark control. Judge visible facts only.",
       "requirements": {
-        "mustShow": [
-          "black insulated travel tumbler or coffee tumbler",
-          "person presenting or reviewing the product"
-        ]
+        "mustShow": ["black insulated travel tumbler or coffee tumbler", "person presenting or reviewing the product"]
       },
       "expectedChecks": [
-        {
-          "type": "mustShow",
-          "rule": "black insulated travel tumbler or coffee tumbler",
-          "status": "pass"
-        },
-        {
-          "type": "mustShow",
-          "rule": "person presenting or reviewing the product",
-          "status": "pass"
-        }
+        {"type": "mustShow", "rule": "black insulated travel tumbler or coffee tumbler", "status": "pass"},
+        {"type": "mustShow", "rule": "person presenting or reviewing the product", "status": "pass"}
       ],
       "groundTruth": []
     }

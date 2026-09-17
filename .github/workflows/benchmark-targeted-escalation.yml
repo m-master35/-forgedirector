@@ -51,7 +51,13 @@ env:
 
 jobs:
   paid-benchmark:
-    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.confirm_paid_benchmark == 'RUN_PAID_BENCHMARK') || (github.event_name == 'push' && github.event.head_commit.message == 'benchmark: RUN_PAID_TARGETED_ESCALATION')) && vars.AWS_SAM_ARTIFACT_BUCKET != '' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+    if: >-
+      ${{
+        ((github.event_name == 'workflow_dispatch' && inputs.confirm_paid_benchmark == 'RUN_PAID_BENCHMARK')
+        || (github.event_name == 'push' && github.event.head_commit.message == 'benchmark: RUN_PAID_TARGETED_ESCALATION'))
+        && vars.AWS_SAM_ARTIFACT_BUCKET != ''
+        && vars.AWS_DEPLOY_ROLE_ARN != ''
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

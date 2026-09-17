@@ -1,0 +1,3 @@
+One-shot authorization marker for the bounded production live-API proxy benchmark of targeted Nova Pro escalation.
+
+This marker authorizes only the isolated proxy workflow on the experiment branch. The workflow is capped at 3 localized cases, 12 analyze API calls, 180 Nova Pro analysis-video seconds, and a conservative $0.75 reported-token estimate guard. It does not deploy code, change IAM, modify billing, or change production configuration.

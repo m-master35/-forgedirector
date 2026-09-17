@@ -1,0 +1,44 @@
+name: Targeted escalation AWS OIDC preflight
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+
+jobs:
+  oidc-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout experiment head
+        uses: actions/checkout@v6
+
+      - name: Authorize one-shot preflight
+        id: authorize
+        shell: bash
+        run: |
+          MESSAGE="$(git log -1 --pretty=%s)"
+          if [ "$MESSAGE" = "preflight: CHECK_TARGETED_ESCALATION_OIDC" ]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure existing AWS credentials with OIDC
+        if: ${{ steps.authorize.outputs.authorized == 'true' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ForgeDirectorTargetedEscalationPreflight
+          mask-aws-account-id: true
+
+      - name: Verify caller identity only
+        if: ${{ steps.authorize.outputs.authorized == 'true' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+        run: aws sts get-caller-identity --query Arn --output text
